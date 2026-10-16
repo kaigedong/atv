@@ -401,6 +401,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         close.setOnClickListener(view -> settingsDialog.dismiss());
         content.addView(close, new LinearLayout.LayoutParams(-1, dp(48)));
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
         scroll.addView(content);
         settingsDialog.setContentView(scroll);
         settingsDialog.setOnKeyListener((dialog, key, event) -> {

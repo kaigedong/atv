@@ -5,11 +5,13 @@
 所有 Actions 固定完整提交 SHA；默认仅有 `contents: read` 权限，只有独立 Release
 发布任务具有 `contents: write`，checkout 不持久化凭证。
 
-2026-10-16 的 [完整成功运行](https://github.com/kaigedong/atv/actions/runs/38865926889)
-对应代码提交 `d3648c5`：14 项任务全部通过，9 个 artifact 已上传，
-并自动公开 [v0.1.0-r1007 Release](https://github.com/kaigedong/atv/releases/tag/v0.1.0-r1007)。
+2026-10-16 的 [完整成功运行](https://github.com/kaigedong/atv/actions/runs/38871418620)
+对应代码提交 `8793d35`：14 项任务全部通过，9 个 artifact 已上传，
+并自动公开 [v0.1.0-r1009 Release](https://github.com/kaigedong/atv/releases/tag/v0.1.0-r1009)，
+Android 已包含设置、清晰度和更新入口。
 Release 的 14 个附件包含 12 个产品包与 manifest / SHA256SUMS；所有产品摘要已核对，
-ARMv7 APK 另外通过无登录公开下载、实际版本号 1007 与原有证书/v1 签名复核。
+此前 ARMv7 APK 已通过无登录公开下载、版本号及原有证书/v1 签名复核；
+本轮 x86 / x86_64 正式 APK 另外核对摘要并安装到 API 19 / TV API 36 独立测试实例。
 本轮后的纯文档状态同步提交使用 `[skip ci]` 避免重复编译，应用与构建源码仍与该成功运行一致。
 
 | 目标 | 产物 / Actions artifact | 构建范围 |

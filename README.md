@@ -16,7 +16,7 @@ Android 支持 `armeabi-v7a`、`arm64-v8a`、`x86`、`x86_64`；Apple 包默认�
 Release 提供使用固定项目密钥签名的五种 Android release APK；密钥仅存于 GitHub Environment Secrets。
 具体目标、产物与限制见 [自动构建](docs/ci.md)，公开内容审查规则见 [发布与隐私](docs/publication.md)。
 
-已验证的 [完整成功构建](https://github.com/kaigedong/atv/actions/runs/38865926889) 的 14 项任务全部通过，并已自动发布 [v0.1.0-r1007](https://github.com/kaigedong/atv/releases/tag/v0.1.0-r1007)：五个正式签名 APK、两个 Linux 归档、五个 Apple 归档及校验文件。编译通过与真机播放验收分别记录。
+已验证的 [完整成功构建](https://github.com/kaigedong/atv/actions/runs/38871418620) 的 14 项任务全部通过，并已自动发布 [v0.1.0-r1009](https://github.com/kaigedong/atv/releases/tag/v0.1.0-r1009)：包含设置、清晰度和更新功能的五个正式签名 APK，以及 Linux、Apple 归档和校验文件。编译通过与真机播放验收分别记录。
 
 ## Android 构建
 
