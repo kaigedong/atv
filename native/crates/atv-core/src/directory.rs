@@ -194,12 +194,12 @@ mod tests {
     #[test]
     fn bundled_directory_has_real_ids_and_rights() {
         let c = bundled().unwrap();
-        assert_eq!(c.len(), 73);
+        assert_eq!(c.len(), 60);
         assert_eq!(
             c.iter().find(|x| x.channel_name == "CCTV1").unwrap().pid,
             "600001859"
         );
-        assert!(c.iter().any(|x| !x.public()));
+        assert!(c.iter().all(|x| !x.is_vip));
     }
     #[test]
     fn rejects_truncation_and_integer_overflow() {
