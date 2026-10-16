@@ -123,7 +123,13 @@ Android TV 与 API 19 / 512 MiB 模拟器均已完成真实 GitHub Release 检�
 完整 APK 流式下载与重新校验，以及当前开发签名不能覆盖正式签名包的拦截提示。
 API 19 这里只验收设置与更新组件，不冒充其 stock 软件解码器支持当前 High Profile 直播。
 本地结果位于忽略目录 `test-artifacts/settings/`；未将设备标识、抓包或下载 APK 放入源码。
-正式签名包经系统安装器完成覆盖升级的验收将在正式构建后补充。
+正式签名 TV / API 36 已完成应用内 `1009 → 1010` 覆盖升级：实际检查并下载 Release、
+进入“安装未知应用”授权页、手动允许后调用系统安装器确认更新，安装后清晰度偏好仍为超清。
+该路径使用只读授权 content URI，没有通过 adb install 替代应用内安装。
+
+API 19 无共享存储的正式基线 `1011` 已安装，版本检查与超清偏好保存通过。
+其独立 APK 暂存目录兼容修复与避免重复文字刷新已通过正式 CI；下一递增版本用于验证
+旧系统 file URI 的完整覆盖升级，结果会在完成后补充。
 
 ```sh
 ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=settings ./scripts/android-runtime-check.sh
