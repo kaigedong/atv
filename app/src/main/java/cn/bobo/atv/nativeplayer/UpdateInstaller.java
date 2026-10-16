@@ -33,6 +33,13 @@ final class UpdateInstaller {
         if (!certificate(archive.signatures).equals(expectedCertificate)) throw new Failure("安装包签名不匹配，已阻止安装");
         if (!certificate(installed.signatures).equals(expectedCertificate))
             throw new Failure("当前安装的是开发签名版本，无法覆盖升级；请先卸载后安装正式版");
+        if (Build.VERSION.SDK_INT < 24 && root.equals(activity.getDir("update_staging", Activity.MODE_PRIVATE).getCanonicalFile())) {
+            // No shared storage: grant traversal only to this APK-only directory,
+            // and read permission to the already verified public release APK.
+            // Never change files/, preferences, identities or the app data root.
+            if (!root.setExecutable(true, false) || !file.getParentFile().setExecutable(true, false)
+                    || !file.setReadable(true, false)) throw new Failure("无法准备旧系统安装文件，请检查存储权限");
+        }
         return file;
     }
     private static String certificate(Signature[] signatures) throws Exception {

@@ -157,7 +157,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (NativeBridge.available()) {
             File privateUpdates = new File(getFilesDir(), "updates");
             updateDirectory = Build.VERSION.SDK_INT < 24 ? getExternalFilesDir("updates") : privateUpdates;
-            if (updateDirectory == null) updateDirectory = privateUpdates;
+            if (updateDirectory == null) updateDirectory = getDir("update_staging", MODE_PRIVATE);
             try { updater = NativeBridge.updateCreate(privateUpdates.getAbsolutePath(), updateDirectory.getAbsolutePath(),
                     BuildConfig.VERSION_CODE, Build.VERSION.SDK_INT); }
             catch (RuntimeException | LinkageError error) { updater = 0; }
@@ -257,14 +257,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             showError(state.optString("message", getString(R.string.native_failure)));
         } else {
             status.setVisibility(View.VISIBLE);
-            status.setText("paused".equals(phase) ? R.string.paused : R.string.loading);
+            setTextChanged(status, getString("paused".equals(phase) ? R.string.paused : R.string.loading));
             retry.setVisibility(View.GONE);
         }
     }
 
     private void showError(String message) {
         status.setVisibility(View.VISIBLE);
-        status.setText(message.isEmpty() ? getString(R.string.native_failure) : message);
+        setTextChanged(status, message.isEmpty() ? getString(R.string.native_failure) : message);
         retry.setVisibility(View.VISIBLE);
     }
 
