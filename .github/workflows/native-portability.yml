@@ -76,6 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -146,6 +147,41 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+  publish-release:
+    if: github.repository == 'kaigedong/atv' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [android-release-sign, linux-desktop-build, apple-native-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-atv-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: atv-android-signed
+          path: ci-dist/downloaded/atv-android-signed/
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: atv-linux-*
+          path: ci-dist/downloaded/
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: atv-apple-*
+          path: ci-dist/downloaded/
+      - name: Publish complete verified native release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci-publish-release.py
 
   linux-desktop-build:
     needs: publication-audit

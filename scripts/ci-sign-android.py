@@ -108,7 +108,8 @@ def main():
                      "--output", str(target.with_suffix(".json"))], environment)
             artifacts.append({"file": target.name, "abi": abi, "minSdk": 19, "sha256": sha256(target),
                               "signature": signatures, "runtimePlaybackVerifiedByCi": False})
-    output = {"sourceCommit": commit, "artifacts": artifacts,
+    output = {"sourceCommit": commit, "versionCode": manifest["versionCode"],
+              "versionName": manifest["versionName"], "tag": manifest["tag"], "artifacts": artifacts,
               "signing": "Persistent android-release GitHub environment key; no private key in artifacts."}
     (args.output / "manifest.json").write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     (args.output / "SHA256SUMS").write_text(

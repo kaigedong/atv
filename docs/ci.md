@@ -2,7 +2,8 @@
 
 工作流为 `.github/workflows/native-portability.yml`，在 main push、面向 main 的 PR
 以及 Actions 手动触发时执行。先通过发布与隐私检查，再并行测试和构建各平台。
-所有 Actions 固定完整提交 SHA；工作流仅有 `contents: read` 权限，checkout 不持久化凭证。
+所有 Actions 固定完整提交 SHA；默认仅有 `contents: read` 权限，只有独立 Release
+发布任务具有 `contents: write`，checkout 不持久化凭证。
 
 2026-10-16 的 [完整成功运行](https://github.com/kaigedong/atv/actions/runs/38863693642)
 对应代码提交 `8870dfc`：13 项检查全部通过，9 个 artifact 已上传，
@@ -18,7 +19,8 @@
 | tvOS 16+ / Apple TV | `atv-apple-tvos`、`atv-apple-tvos-simulator` | 真机 ARM64；模拟器 ARM64 |
 | Windows / macOS / Linux 核心 | 不生成 Windows 桌面应用 | Rust 单元测试、Clippy、格式与平台边界检查；Linux 额外运行真实 C ABI consumer |
 
-在 GitHub 成功运行页面底部 **Artifacts** 中下载。产物保留 14 天；过期后可以手动重跑。
+正常安装从 [GitHub Releases](https://github.com/kaigedong/atv/releases/latest) 下载；
+成功运行页面底部 **Artifacts** 另外保留调试产物和报告，保留 14 天。
 Android 包名标明 ABI 与 debug / release-unsigned；选择旧 ARMv7 盒子时使用 `armeabi-v7a`。
 每个产物目录包含 manifest 与 SHA256SUMS；Android 额外包含 APK 的资源/DEX/ELF 依赖检查。
 
@@ -48,8 +50,26 @@ GitHub Secrets 不能直接读回，删除或覆盖唯一的密钥后无法继�
 公开产物只有 APK、检查 JSON、manifest 和 SHA256SUMS。原有 Debug 与 unsigned artifact
 继续保留用于调试；临时 Debug 包切换到正式签名包需要卸载重装，应用本地数据随卸载清除。
 
-此步骤只接入固定签名和可安装构建产物；按 commit 递增版本、GitHub Release 发布以及
-客户端检查更新仍是 issue #1 的后续工作，当前 `versionCode` 尚未自动递增。
+## 自动发布 Release
+
+main 的隐私检查、共享核心、Android 签名、Linux 与 Apple 构建全部成功后，
+独立 `publish-release` 任务下载同一轮构建的已签名 Android 与各平台归档。
+发布内容为五个 APK、两个 Linux 归档、五个 Apple 归档、统一 manifest 与 SHA256SUMS；
+不发布 Debug、unsigned Android 包、私钥或整个工作目录。
+
+Android `versionCode = 1000 + main 首父提交数`，`versionName = 0.1.0-r<versionCode>`，
+Release tag 为 `v<versionName>`。完整历史 checkout 确保计数一致；同 commit 重跑保持版本，
+每次新的 main 提交递增版本。必须保留 main 历史；发布任务也拒绝将旧版本设置为最新版本。
+构建脚本从实际 APK 的 aapt2 badging 核对版本，签名及发布 manifest 都保留相同 commit 和版本。
+
+只有指定的同 commit 产物且摘要、证书指纹和 APK 检查一致才进入 Release。
+任务先创建 draft，上传全部文件，核对 GitHub 返回的每个 asset 的 SHA-256，再公开并设为 latest。
+失败的 draft 不对普通用户可见；重试补齐缺失文件，已发布版本不自动覆盖。
+发布任务串行执行，发布前后检查 main 是否已前进，旧构建不抢占较新构建的 latest。
+
+首个补发的 Android 基线版本为 `v0.1.0-native.1`，应用 versionCode 为 1。
+后续自动版本从 1000 以上递增，可覆盖同一正式签名的基线安装。
+应用内检查更新、下载和启动安装器仍待实现；这里完成构建到 Releases 的发布链路。
 
 Rust 固定 1.99.1。Android 使用 JDK 21、SDK 36、Build Tools 35.0.0，
 32 位 NDK 25.2.9519653/API 19，64 位 NDK 29.0.14206865/API 21。

@@ -10,6 +10,11 @@ if (!abiList || abiList.toSet().size() != abiList.size() || !abiList.every { it 
 def pythonCommand = providers.environmentVariable('ATV_PYTHON')
     .orElse(System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3').get()
 def rustJniDirectory = layout.buildDirectory.dir('generated/rustJniLibs')
+def releaseVersionCode = providers.gradleProperty('atvVersionCode').orElse('1').get().toInteger()
+def releaseVersionName = providers.gradleProperty('atvVersionName').orElse('0.1.0-native').get()
+if (releaseVersionCode < 1 || releaseVersionCode > 2100000000 || !(releaseVersionName ==~ /[0-9A-Za-z.+_-]{1,80}/)) {
+    throw new GradleException('Invalid Android release version')
+}
 
 android {
     namespace 'cn.bobo.atv.nativeplayer'
@@ -20,8 +25,8 @@ android {
         applicationId 'cn.bobo.atv.nativeplayer'
         minSdk 19
         targetSdk 36
-        versionCode 1
-        versionName '0.1.0-native'
+        versionCode releaseVersionCode
+        versionName releaseVersionName
         testInstrumentationRunner 'cn.bobo.atv.nativeplayer.NativeRuntimeInstrumentation'
         ndk {
             abiFilters.addAll(abiList)

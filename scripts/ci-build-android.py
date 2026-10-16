@@ -5,13 +5,18 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import re
+from android_version import build_version
+from toolchain import android_sdk
 
 ROOT = Path(__file__).resolve().parent.parent
 output = ROOT / "ci-dist/android"
 output.mkdir(parents=True, exist_ok=True)
 artifacts = []
+version = build_version(ROOT)
 for abi in ["universal", "armeabi-v7a", "arm64-v8a", "x86", "x86_64"]:
     command = [str(ROOT / "scripts/android-build.sh"), ":app:clean", "assembleDebug", "assembleRelease"]
+    command += [f'-PatvVersionCode={version["versionCode"]}', f'-PatvVersionName={version["versionName"]}']
     if abi == "universal":
         command.append("lintDebug")
     else:
@@ -22,6 +27,11 @@ for abi in ["universal", "armeabi-v7a", "arm64-v8a", "x86", "x86_64"]:
         suffix = "debug" if variant == "debug" else "release-unsigned"
         target = output / f"atv-android-{abi}-{suffix}.apk"
         shutil.copyfile(source, target)
+        badging = subprocess.check_output([str(android_sdk() / "build-tools/35.0.0/aapt2"),
+                                           "dump", "badging", str(target)], text=True)
+        package = re.search(r"^package: name='cn.bobo.atv.nativeplayer' versionCode='(\d+)' versionName='([^']+)'", badging, re.M)
+        if not package or (int(package[1]), package[2]) != (version["versionCode"], version["versionName"]):
+            raise SystemExit("Packaged APK version does not match its commit-derived release identity")
         gate = ROOT / "app/build/reports/native" / (variant + ".json")
         report = json.loads(gate.read_text())
         digest = hashlib.sha256(target.read_bytes()).hexdigest()
@@ -32,7 +42,7 @@ for abi in ["universal", "armeabi-v7a", "arm64-v8a", "x86", "x86_64"]:
                           "minSdk": 19, "debugSigned": variant == "debug",
                           "runtimePlaybackVerifiedByCi": False})
 (output / "manifest.json").write_text(json.dumps({
-    "sourceCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+    **version,
     "artifacts": artifacts,
     "signing": "Debug uses an ephemeral runner key; release APKs are unsigned. No signing keys are uploaded."
 }, indent=2) + "\n")
