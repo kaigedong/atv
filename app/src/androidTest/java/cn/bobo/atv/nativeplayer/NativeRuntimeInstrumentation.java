@@ -84,6 +84,8 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "component": component(); break;
                 case "settings": settings(false); break;
                 case "settings-basic": settings(true); break;
+                case "overlays": overlays(false); break;
+                case "overlays-basic": overlays(true); break;
                 default: throw new CheckFailure("unknown instrumentation mode");
             }
             passed = true;
@@ -210,12 +212,113 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         awaitProgress(CHANNELS[1][1], 2);
         require(boolField("fullscreen") && viewField("sidebar").getVisibility() == View.GONE,
                 "fullscreen DPAD_DOWN did not preserve fullscreen");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        waitCondition(() -> !boolField("fullscreen"), 3000, "CENTER did not open channel overlay");
         sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
-        waitCondition(() -> !boolField("fullscreen"), 3000, "BACK did not exit fullscreen");
-        require(!activity.isFinishing(), "BACK unexpectedly finished fullscreen activity");
+        waitCondition(() -> boolField("fullscreen"), 3000, "BACK did not close channel overlay");
+        require(!activity.isFinishing(), "BACK unexpectedly finished channel overlay activity");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        waitCondition(() -> !boolField("fullscreen"), 3000, "CENTER did not reopen channel overlay");
         awaitProgress(CHANNELS[1][1], 2);
         currentStep.put("remoteKeys", new JSONArray().put("DPAD_UP").put("DPAD_DOWN").put("DPAD_CENTER").put("DPAD_CENTER")
-                .put("DPAD_UP").put("DPAD_DOWN").put("BACK"));
+                .put("DPAD_UP").put("DPAD_DOWN").put("DPAD_CENTER").put("BACK").put("DPAD_CENTER"));
+        complete();
+    }
+
+    private Rect bounds(String fieldName) throws Exception {
+        Rect rect = new Rect();
+        main(() -> {
+            View view = viewField(fieldName); int[] position = new int[2]; view.getLocationOnScreen(position);
+            rect.set(position[0], position[1], position[0] + view.getWidth(), position[1] + view.getHeight());
+        });
+        return rect;
+    }
+    private void assertOverlayPreservesVideo(long handle, Rect surfaceBounds, boolean basic) throws Exception {
+        waitForIdleSync();
+        require(session() == handle, "overlay recreated native playback session");
+        currentStep.put("expectedSurfaceBounds", surfaceBounds.flattenToString())
+                .put("observedSurfaceBounds", bounds("surface").flattenToString());
+        require(surfaceBounds.equals(bounds("surface")), "overlay moved or resized video surface");
+        main(() -> {
+            View area = viewField("playerArea"); View parent = (View) area.getParent();
+            require(area.getWidth() == parent.getWidth() && area.getHeight() == parent.getHeight(),
+                    "video container does not fill the window");
+        });
+        if (!basic) awaitProgress(CHANNELS[2][1], 2);
+    }
+    private void overlays(boolean basic) throws Exception {
+        begin("full-size-live-video-under-native-translucent-overlays");
+        if (!basic) { selectChannel(CHANNELS[2]); awaitProgress(CHANNELS[2][1], 2); }
+        else {
+            main(() -> NativeBridge.pause(session()));
+            waitCondition(() -> "paused".equals(status().optString("state")), 10000, "cannot stabilize API 19 UI-only probe");
+        }
+        main(() -> {
+            Button full = findButton(activity.getWindow().getDecorView(), resourceString("fullscreen"));
+            require(full != null && full.performClick(), "cannot hide initial channel overlay");
+        });
+        waitCondition(() -> bounds("playerArea").width() > bounds("playerArea").height(), 5000, "landscape layout did not settle");
+        SystemClock.sleep(300);
+        waitForIdleSync();
+        long handle = session(); Rect fullSize = bounds("surface");
+        require(boolField("fullscreen"), "initial overlay did not close");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        waitCondition(() -> !boolField("fullscreen"), 3000, "CENTER did not open channel overlay");
+        main(() -> {
+            View panel = viewField("sidebar");
+            int alpha = android.graphics.Color.alpha(((android.graphics.drawable.ColorDrawable) panel.getBackground()).getColor());
+            require(alpha > 0 && alpha < 255, "channel panel is not translucent");
+        });
+        // Browse with real remote keys without selecting: audio/video and PID
+        // must keep advancing on the old channel until explicit confirmation.
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+        main(() -> require(channelRows().findViewWithTag(selectedPid()).requestFocus(), "cannot focus playing channel"));
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+        if (!basic) require(CHANNELS[2][1].equals(selectedPid()), "browsing selected a new channel without confirmation");
+        assertOverlayPreservesVideo(handle, fullSize, basic);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+        waitCondition(this::settingsShowing, 3000, "MENU did not open settings overlay");
+        main(() -> {
+            android.app.Dialog dialog = (android.app.Dialog) field("settingsDialog");
+            require((dialog.getWindow().getAttributes().flags & android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND) == 0,
+                    "settings dims the entire video window");
+            ViewGroup host = dialog.findViewById(android.R.id.content);
+            android.widget.ScrollView scroll = (android.widget.ScrollView) host.getChildAt(0);
+            int alpha = android.graphics.Color.alpha(((android.graphics.drawable.ColorDrawable) scroll.getChildAt(0).getBackground()).getColor());
+            require(alpha > 0 && alpha < 255, "settings panel is not translucent");
+        });
+        assertOverlayPreservesVideo(handle, fullSize, basic);
+        main(() -> require(viewField("qualityButton").performClick(), "cannot open quality overlay"));
+        assertOverlayPreservesVideo(handle, fullSize, basic);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> field("qualityDialog") == null, 3000, "BACK did not close quality choices");
+        require(settingsShowing(), "quality BACK also closed settings");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> !settingsShowing() && !boolField("fullscreen"), 3000, "settings did not restore channel overlay");
+        assertOverlayPreservesVideo(handle, fullSize, basic);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> boolField("fullscreen"), 3000, "BACK did not hide channel overlay");
+        require(!activity.isFinishing(), "closing channel overlay finished playback");
+        assertOverlayPreservesVideo(handle, fullSize, basic);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+        waitCondition(this::settingsShowing, 3000, "RIGHT did not open fullscreen settings");
+        assertOverlayPreservesVideo(handle, fullSize, basic);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> !settingsShowing(), 3000, "BACK did not close fullscreen settings");
+        waitCondition(this::windowFocused, 3000, "playback window did not regain focus after settings");
+        require(boolField("fullscreen"), "fullscreen settings unexpectedly opened channel panel");
+        currentStep.put("surfaceBoundsPreserved", fullSize.flattenToString()).put("sameNativeSession", true)
+                .put("translucentChannelAndSettingsPanels", true).put("liveAudioVideoAdvancedUnderOverlays", !basic)
+                .put("qualityAndBackHierarchyPassed", true);
+        if (!basic) {
+            sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+            waitCondition(() -> !boolField("fullscreen"), 3000, "cannot reopen channels for switch");
+            main(() -> require(channelRows().findViewWithTag(CHANNELS[1][1]).requestFocus(), "cannot focus destination channel"));
+            sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+            awaitProgress(CHANNELS[1][1], 2);
+            require(handle == session() && fullSize.equals(bounds("surface")), "confirmed switch changed video container");
+            currentStep.put("confirmedChannelSwitchPassed", true);
+        }
         complete();
     }
 
@@ -272,8 +375,8 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
             sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
             waitCondition(() -> !settingsShowing(), 3000, "settings BACK did not dismiss fullscreen overlay");
             require(boolField("fullscreen"), "closing settings unexpectedly exited fullscreen");
-            sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
-            waitCondition(() -> !boolField("fullscreen"), 3000, "second BACK did not exit fullscreen");
+            sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+            waitCondition(() -> !boolField("fullscreen"), 3000, "CENTER did not open channel overlay");
             currentStep.put("fullscreenRightAndBackPassed", true).put("surfacePreserved", true);
             main(() -> require(viewField("settingsButton").performClick(), "visible settings button failed"));
             waitCondition(this::settingsShowing, 3000, "settings button did not open settings");

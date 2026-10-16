@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -89,14 +91,38 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(12, 13, 16));
-        root.setPadding(dp(20), dp(12), dp(20), dp(12));
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
         setContentView(root);
+
+        // Keep the video in one full-window container. Menus are sibling
+        // overlays, so showing them never resizes or replaces the Surface.
+        playerArea = new FrameLayout(this);
+        playerArea.setBackgroundColor(Color.BLACK);
+        root.addView(playerArea, new FrameLayout.LayoutParams(-1, -1));
+        surface = new SurfaceView(this);
+        surface.getHolder().addCallback(this);
+        surface.setOnClickListener(view -> setFullscreen(false));
+        surface.setFocusable(false);
+        playerArea.addView(surface, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
+        playerArea.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob) -> fitSurface());
+        LinearLayout message = new LinearLayout(this);
+        message.setOrientation(LinearLayout.VERTICAL);
+        message.setGravity(Gravity.CENTER);
+        status = text(getString(R.string.no_surface), 20);
+        status.setGravity(Gravity.CENTER);
+        status.setBackgroundColor(Color.argb(180, 12, 13, 16));
+        message.addView(status);
+        retry = button(getString(R.string.retry));
+        retry.setVisibility(View.GONE);
+        retry.setOnClickListener(view -> select(selected));
+        message.addView(retry);
+        playerArea.addView(message, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
 
         topbar = new LinearLayout(this);
         topbar.setGravity(Gravity.CENTER_VERTICAL);
+        topbar.setPadding(dp(20), dp(4), dp(20), dp(4));
+        topbar.setBackgroundColor(Color.argb(180, 12, 13, 16));
         title = text("ATV · 电视直播", 22);
         topbar.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1));
         settingsButton = button(getString(R.string.settings));
@@ -106,14 +132,16 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         full.setId(View.generateViewId());
         full.setOnClickListener(view -> setFullscreen(!fullscreen));
         topbar.addView(full);
-        root.addView(topbar);
+        root.addView(topbar, new FrameLayout.LayoutParams(-1, dp(56), Gravity.TOP));
 
-        LinearLayout content = new LinearLayout(this);
-        root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
         sidebar = new LinearLayout(this);
         sidebar.setOrientation(LinearLayout.VERTICAL);
-        sidebar.setPadding(0, dp(8), dp(16), 0);
-        content.addView(sidebar, new LinearLayout.LayoutParams(dp(220), -1));
+        sidebar.setPadding(dp(12), dp(8), dp(12), dp(8));
+        sidebar.setBackgroundColor(Color.argb(190, 12, 13, 16));
+        FrameLayout.LayoutParams channelPanel = new FrameLayout.LayoutParams(
+                Math.min(dp(280), getResources().getDisplayMetrics().widthPixels / 2), -1, Gravity.LEFT);
+        channelPanel.setMargins(dp(16), dp(68), 0, dp(48));
+        root.addView(sidebar, channelPanel);
         LinearLayout groups = new LinearLayout(this);
         Button cctv = button(getString(R.string.cctv));
         Button satellite = button(getString(R.string.satellite));
@@ -128,28 +156,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         scroll.addView(channelRows);
         sidebar.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        playerArea = new FrameLayout(this);
-        playerArea.setBackgroundColor(Color.BLACK);
-        content.addView(playerArea, new LinearLayout.LayoutParams(0, -1, 1));
-        surface = new SurfaceView(this);
-        surface.getHolder().addCallback(this);
-        playerArea.addView(surface, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
-        playerArea.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob) -> fitSurface());
-        LinearLayout message = new LinearLayout(this);
-        message.setOrientation(LinearLayout.VERTICAL);
-        message.setGravity(Gravity.CENTER);
-        status = text(getString(R.string.no_surface), 20);
-        status.setGravity(Gravity.CENTER);
-        message.addView(status);
-        retry = button(getString(R.string.retry));
-        retry.setVisibility(View.GONE);
-        retry.setOnClickListener(view -> select(selected));
-        message.addView(retry);
-        playerArea.addView(message, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
         hint = text(getString(R.string.remote_hint), 12);
         hint.setTextColor(Color.LTGRAY);
         hint.setGravity(Gravity.CENTER);
-        root.addView(hint, new LinearLayout.LayoutParams(-1, dp(28)));
+        hint.setBackgroundColor(Color.argb(180, 12, 13, 16));
+        root.addView(hint, new FrameLayout.LayoutParams(-1, dp(36), Gravity.BOTTOM));
 
         loadChannels();
         preferredQuality = getPreferences(MODE_PRIVATE).getString("quality", "auto");
@@ -305,9 +316,20 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         return super.onKeyDown(keyCode, event);
     }
 
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        int key = event.getKeyCode();
+        if (fullscreen && (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN
+                || key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
+                || key == KeyEvent.KEYCODE_DPAD_CENTER)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) onKeyDown(key, event);
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     private void handleBack() {
         if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
-        else if (fullscreen) setFullscreen(false); else finish();
+        else if (!fullscreen) setFullscreen(true); else finish();
     }
     @SuppressLint("GestureBackNavigation") // API 33+ uses the native dispatcher above.
     @SuppressWarnings("deprecation")
@@ -356,24 +378,55 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 controller.hide(WindowInsets.Type.systemBars());
                 controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
-        } else getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
+        } else getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private TextView text(String value, int size) {
         TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(Color.WHITE); return view;
     }
-    private Button button(String value) { Button view = new Button(this); view.setText(value); return view; }
+    private Button button(String value) {
+        Button view = new Button(this);
+        view.setText(value);
+        view.setTextColor(new android.content.res.ColorStateList(new int[][] {
+                new int[]{-android.R.attr.state_enabled}, new int[]{}
+        }, new int[]{Color.GRAY, Color.WHITE}));
+        StateListDrawable background = new StateListDrawable();
+        background.addState(new int[]{android.R.attr.state_pressed}, new ColorDrawable(Color.argb(230, 42, 111, 161)));
+        background.addState(new int[]{android.R.attr.state_focused}, new ColorDrawable(Color.argb(220, 42, 111, 161)));
+        background.addState(new int[]{}, new ColorDrawable(Color.argb(45, 255, 255, 255)));
+        view.setBackground(background);
+        view.setPadding(dp(12), dp(4), dp(12), dp(4));
+        return view;
+    }
+
+    private void styleOverlayWindow(Dialog dialog, boolean customPanel) {
+        android.view.Window window = dialog.getWindow();
+        if (window == null) return;
+        window.setBackgroundDrawable(new ColorDrawable(customPanel ? Color.TRANSPARENT : Color.argb(225, 20, 22, 28)));
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        android.view.WindowManager.LayoutParams attributes = window.getAttributes();
+        attributes.x = dp(16);
+        window.setAttributes(attributes);
+        android.util.DisplayMetrics display = getResources().getDisplayMetrics();
+        window.setLayout(Math.min(display.widthPixels - dp(32), dp(420)),
+                customPanel ? Math.min(display.heightPixels - dp(32), dp(520)) : -2);
+        window.getDecorView().setSystemUiVisibility(getWindow().getDecorView().getSystemUiVisibility());
+    }
 
     private void openSettings() {
         if (settingsDialog != null && settingsDialog.isShowing()) return;
         final View previousFocus = getCurrentFocus();
+        final boolean restoreChannels = !fullscreen;
+        setFullscreen(true);
         settingsDialog = new Dialog(this);
         settingsDialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(24), dp(12), dp(24), dp(12));
-        content.setBackgroundColor(Color.rgb(27, 29, 35));
+        content.setBackgroundColor(Color.argb(200, 20, 22, 28));
         content.addView(text("设置", 24));
         qualitySummary = text("正在读取直播信息…", 17);
         content.addView(qualitySummary);
@@ -414,15 +467,12 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             settingsDialog = null;
             qualitySummary = updateSummary = null;
             qualityButton = updateCheck = updateDownload = updateInstall = updateCancel = null;
+            if (restoreChannels && !isFinishing() && !isDestroyed()) setFullscreen(false);
             if (previousFocus != null && previousFocus.isShown()) previousFocus.requestFocus();
             hideSystemBars();
         });
         settingsDialog.show();
-        if (settingsDialog.getWindow() != null) {
-            android.util.DisplayMetrics display = getResources().getDisplayMetrics();
-            settingsDialog.getWindow().setLayout(Math.min(display.widthPixels - dp(32), dp(680)),
-                    Math.min(display.heightPixels - dp(24), dp(520)));
-        }
+        styleOverlayWindow(settingsDialog, true);
         refreshSettings();
         qualityButton.requestFocus();
     }
@@ -435,6 +485,13 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             case "fhd": return "蓝光";
             default: return "自动（优先流畅）";
         }
+    }
+    private void refreshSettingsVisibility() {
+        if (settingsDialog == null) return;
+        View content = settingsDialog.findViewById(android.R.id.content);
+        if (content != null) content.setVisibility(
+                (qualityDialog != null && qualityDialog.isShowing()) || (messageDialog != null && messageDialog.isShowing())
+                ? View.INVISIBLE : View.VISIBLE);
     }
     private void chooseQuality() {
         List<String> ids = new ArrayList<>(); ids.add("auto");
@@ -455,8 +512,13 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                     getPreferences(MODE_PRIVATE).edit().putString("quality", quality).apply();
                     choice.dismiss(); refreshSettings();
                 }).setNegativeButton("返回", null).create();
-        qualityDialog.setOnDismissListener(dialog -> { qualityDialog = null; if (qualityButton != null) qualityButton.requestFocus(); });
+        qualityDialog.setOnDismissListener(dialog -> {
+            qualityDialog = null; refreshSettingsVisibility();
+            if (qualityButton != null) qualityButton.requestFocus();
+        });
         qualityDialog.show();
+        styleOverlayWindow(qualityDialog, false);
+        refreshSettingsVisibility();
     }
 
     private void refreshSettings() {
@@ -523,8 +585,13 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private void updateMessage(String message) {
         if (messageDialog != null) messageDialog.dismiss();
         messageDialog = new AlertDialog.Builder(this).setMessage(message).setPositiveButton("返回", null).create();
-        messageDialog.setOnDismissListener(dialog -> { messageDialog = null; if (updateInstall != null && updateInstall.isShown()) updateInstall.requestFocus(); });
+        messageDialog.setOnDismissListener(dialog -> {
+            messageDialog = null; refreshSettingsVisibility();
+            if (updateInstall != null && updateInstall.isShown()) updateInstall.requestFocus();
+        });
         messageDialog.show();
+        styleOverlayWindow(messageDialog, false);
+        refreshSettingsVisibility();
     }
     private void setTextChanged(TextView view, String value) {
         if (!android.text.TextUtils.equals(view.getText(), value)) view.setText(value);

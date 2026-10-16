@@ -144,3 +144,28 @@ ATV_TEST_DEVICE=emulator-5574 ATV_TEST_MODE=settings-basic ./scripts/android-run
 ```sh
 cargo run --manifest-path native/Cargo.toml -p atv-update --example probe_release -- /tmp/atv-update-probe 1 download
 ```
+
+## 全尺寸播放与半透明浮层验收（2026-10-16）
+
+Android 的播放器容器改为始终占满窗口，按原始视频比例显示。频道、顶部操作与提示为同层覆盖视图；
+设置和清晰度为半透明原生弹窗，关闭全窗口调暗。打开设置暂时隐藏频道浮层，关闭后恢复原来的菜单状态。
+频道浮层只在确认时切台，浏览和打开菜单不暂停直播；确认切台／切换清晰度仍会重新加载直播。
+返回依次关闭清晰度、设置或频道浮层，没有浮层时退出应用。全屏确认／左键打开频道，右键／菜单键打开设置。
+
+TV / API 36 真实 CCTV13 直播测试已验证：浏览频道、显示设置、显示清晰度选项、返回恢复频道以及
+全屏右键设置期间，原生 session 与 Surface 坐标均保持不变（1920×1080），音视频帧及媒体时间持续推进。
+真实确认切换 CCTV2 后继续输出双轨；最终退出后 render/network 线程归零。
+API 19 / 512 MiB 验证同样的半透明菜单、返回层级和 Surface 坐标保持（1280×800）；
+该基础模式主动暂停直播以单独验收布局，不声称 stock API 19 解码器可播放当前 High Profile 直播。
+API 19 同时固定沉浸式布局尺寸，避免系统栏显示与隐藏造成播放器尺寸变化。
+浮层版本还通过 TV `remote` 与 `settings` 回归：真实上下快捷切台、确认／返回，
+超清 1280×720、蓝光 1920×1080、自动 960×540 切换，以及 Release 检查、取消重试、
+完整下载、缓存重新校验和开发／正式签名不匹配拦截。清晰度或提示弹窗显示时隐藏底下的设置文字，
+关闭后恢复，避免半透明面板间文字叠加。
+
+```sh
+ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=overlays ./scripts/android-runtime-check.sh
+ATV_TEST_DEVICE=emulator-5574 ATV_TEST_MODE=overlays-basic ./scripts/android-runtime-check.sh
+```
+
+本地报告与截图在忽略目录 `test-artifacts/overlays/`；未发布广播截图或设备运行记录。
