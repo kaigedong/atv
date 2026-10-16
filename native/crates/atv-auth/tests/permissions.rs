@@ -1,5 +1,14 @@
 use atv_auth::{ResolveError, parse_live_info};
 use serde_json::json;
+
+#[test]
+fn quality_choices_only_include_advertised_video_definitions() {
+    let response = json!({"code":0,"data":{"iretcode":0,"playurl":"https://fixture.invalid/live.m3u8","defn":"hd",
+        "formats":[{"fn":"hd","defnrate":"540P"},{"fn":"audio"},{"fn":"shd"},{"fn":"shd"},{"fn":"fhd"},{"fn":"unknown"}]}});
+    let info = parse_live_info(&response).unwrap();
+    assert_eq!(info.definitions(), ["hd", "shd", "fhd"]);
+    assert_eq!(info.definition_height(), Some(540));
+}
 #[test]
 fn rejection_never_yields_a_url() {
     for code in [5, 12, 25, 45, 46, 47, 53, 54, 56, 58, 67] {

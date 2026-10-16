@@ -112,3 +112,26 @@ python3 scripts/monitor-native-live.py --serial emulator-5570 --seconds 600 \
 签名和 CMG 算法差分分别见 [rust-auth.md](rust-auth.md)、[rust-cmg.md](rust-cmg.md)。
 原始 WebView commit `9f20444` 已保留于历史标签 `baseline/webview-9f20444`，基线 APK 已保留，哈希仍为
 `3a885f4ed2e69a8cce691893a31014df599989ed2286a595a539c6bca590fef5`。
+
+## 设置、清晰度和更新新增验收（2026-10-16）
+
+Android TV / API 36 模拟器已通过菜单键、顶部按钮、全屏右键打开设置，返回先关闭设置、
+再退出全屏；打开设置保持原 Surface/session。实际 CCTV13 的超清、蓝光、自动依次输出
+1280×720、1920×1080、960×540，并保存清晰度偏好；选项来自服务端视频格式，排除纯音频。
+
+Android TV 与 API 19 / 512 MiB 模拟器均已完成真实 GitHub Release 检查、取消后重试、
+完整 APK 流式下载与重新校验，以及当前开发签名不能覆盖正式签名包的拦截提示。
+API 19 这里只验收设置与更新组件，不冒充其 stock 软件解码器支持当前 High Profile 直播。
+本地结果位于忽略目录 `test-artifacts/settings/`；未将设备标识、抓包或下载 APK 放入源码。
+正式签名包经系统安装器完成覆盖升级的验收将在正式构建后补充。
+
+```sh
+ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=settings ./scripts/android-runtime-check.sh
+ATV_TEST_DEVICE=emulator-5574 ATV_TEST_MODE=settings-basic ./scripts/android-runtime-check.sh
+```
+
+默认 Rust 测试不请求直播或 GitHub 服务；真实检查/下载探针需要明确指定输出目录：
+
+```sh
+cargo run --manifest-path native/Cargo.toml -p atv-update --example probe_release -- /tmp/atv-update-probe 1 download
+```

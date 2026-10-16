@@ -171,7 +171,9 @@ def main():
             "从临时 Debug 签名包迁移需卸载重装，卸载会清除本地数据。\n\n"
             "Linux：提供 x86_64 与 ARM64 归档，需要安装 SDL2、GStreamer 及 AVC/AAC 插件。\n\n"
             "macOS / iOS / tvOS：提供未签名应用归档；Apple 真机安装需要自己的签名配置。\n\n"
-            "本次 CI 验证编译、签名与包检查；未执行真机直播或性能验收。应用内更新尚未实现。\n\n"
+            "Android：菜单键或全屏右键打开设置，可选择频道可用清晰度、检查更新、下载并调用系统安装器。"
+            "安装前校验下载摘要、包名、版本与正式签名。\n\n"
+            "本次 CI 验证编译、签名与包检查；未执行真机直播或性能验收。\n\n"
             f'Android versionCode：{version["versionCode"]}\n'
             f'构建记录：https://github.com/{REPO}/actions/runs/{os.environ["GITHUB_RUN_ID"]}\n',
             encoding="utf-8")

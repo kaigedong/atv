@@ -82,6 +82,8 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "remote": navigationAndFullscreen(); break;
                 case "network": network(); break;
                 case "component": component(); break;
+                case "settings": settings(false); break;
+                case "settings-basic": settings(true); break;
                 default: throw new CheckFailure("unknown instrumentation mode");
             }
             passed = true;
@@ -221,6 +223,122 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         AtomicReference<Boolean> focused = new AtomicReference<>(false);
         main(() -> focused.set(activity.hasWindowFocus()));
         return focused.get();
+    }
+
+    private JSONObject updateStatus() throws Exception {
+        return new JSONObject(NativeBridge.updateStatus(((Number) field("updater")).longValue()));
+    }
+    private boolean settingsShowing() throws Exception {
+        android.app.Dialog dialog = (android.app.Dialog) field("settingsDialog");
+        return dialog != null && dialog.isShowing();
+    }
+    private void selectQuality(String id, String label) throws Exception {
+        main(() -> require(viewField("qualityButton").performClick(), "quality button click failed"));
+        main(() -> {
+            android.app.AlertDialog dialog = (android.app.AlertDialog) field("qualityDialog");
+            require(dialog != null && dialog.isShowing(), "quality choices did not open");
+            android.widget.ListView list = dialog.getListView();
+            int index = -1;
+            for (int i = 0; i < list.getAdapter().getCount(); i++) if (label.equals(list.getAdapter().getItem(i).toString())) index = i;
+            require(index >= 0, "server-advertised quality missing from UI");
+            require(list.performItemClick(list.getAdapter().getView(index, null, list), index, list.getAdapter().getItemId(index)), "quality choice click failed");
+        });
+        waitCondition(() -> id.equals(status().optString("requestedQuality")), 5000, "quality preference did not reach Rust");
+        awaitProgress(CHANNELS[2][1], 2);
+        require(("auto".equals(id) ? "hd" : id).equals(status().optString("effectiveQuality")), "server returned a different definition");
+        currentStep.put(id, new JSONObject().put("requested", id).put("effective", status().optString("effectiveQuality"))
+                .put("width", status().optInt("videoWidth")).put("height", status().optInt("videoHeight")));
+    }
+    private void settings(boolean basic) throws Exception {
+        String previousQuality = (String) field("preferredQuality");
+        try {
+            if (!basic) { selectChannel(CHANNELS[2]); awaitProgress(CHANNELS[2][1], 2); }
+            begin("remote-settings-open-close-and-live-preservation");
+            sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+            waitCondition(this::settingsShowing, 5000, "MENU did not open settings");
+            main(() -> require(viewField("qualityButton").isShown(), "settings content missing"));
+            sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+            waitCondition(() -> !settingsShowing(), 3000, "BACK did not close settings");
+            require(!activity.isFinishing(), "settings BACK exited the app");
+            main(() -> {
+                Button full = findButton(activity.getWindow().getDecorView(), resourceString("fullscreen"));
+                require(full != null && full.performClick(), "fullscreen entry missing");
+            });
+            waitCondition(() -> boolField("fullscreen"), 3000, "cannot enter fullscreen for settings test");
+            long beforeSettings = session();
+            sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+            waitCondition(this::settingsShowing, 3000, "fullscreen RIGHT did not open settings");
+            require(boolField("fullscreen") && session() == beforeSettings, "settings recreated playback surface");
+            sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+            waitCondition(() -> !settingsShowing(), 3000, "settings BACK did not dismiss fullscreen overlay");
+            require(boolField("fullscreen"), "closing settings unexpectedly exited fullscreen");
+            sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+            waitCondition(() -> !boolField("fullscreen"), 3000, "second BACK did not exit fullscreen");
+            currentStep.put("fullscreenRightAndBackPassed", true).put("surfacePreserved", true);
+            main(() -> require(viewField("settingsButton").performClick(), "visible settings button failed"));
+            waitCondition(this::settingsShowing, 3000, "settings button did not open settings");
+            complete();
+            if (!basic) {
+                begin("real-server-quality-switch-shd-fhd-auto");
+                JSONArray formats = status().optJSONArray("availableQualities");
+                require(formats != null && formats.toString().contains("shd") && formats.toString().contains("fhd"), "CCTV13 formats unavailable");
+                selectQuality("shd", "超清");
+                selectQuality("fhd", "蓝光");
+                selectQuality("auto", "自动（优先流畅）");
+                require("auto".equals(activity.getPreferences(Activity.MODE_PRIVATE).getString("quality", "")), "quality preference not persisted");
+                complete();
+            }
+            begin("real-github-update-check-cancel-download-and-signature-gate");
+            waitCondition(() -> !java.util.Arrays.asList("checking", "downloading", "cancelling").contains(updateStatus().optString("state")), 20000, "automatic check did not finish");
+            main(() -> require(viewField("updateCheck").performClick(), "check update click failed"));
+            waitCondition(() -> java.util.Arrays.asList("available", "current", "error").contains(updateStatus().optString("state")), 30000, "update check did not finish");
+            currentStep.put("updateCheck", updateStatus());
+            require(!"error".equals(updateStatus().optString("state")), "real GitHub release check failed");
+            currentStep.put("checkState", updateStatus().optString("state"));
+            if ("available".equals(updateStatus().optString("state"))) {
+                main(() -> {
+                    long handle = ((Number) field("updater")).longValue();
+                    require(NativeBridge.updateCommand(handle, 1), "download did not start");
+                    require(NativeBridge.updateCommand(handle, 2), "cancel command failed");
+                });
+                waitCondition(() -> "cancelled".equals(updateStatus().optString("state")), 50000, "cancelled update did not stop");
+                main(() -> require(viewField("updateCheck").performClick(), "retry update check click failed"));
+                waitCondition(() -> "available".equals(updateStatus().optString("state")) || "error".equals(updateStatus().optString("state")), 30000, "update retry did not finish");
+                require("available".equals(updateStatus().optString("state")), "update retry failed");
+                main(() -> require(viewField("updateDownload").performClick(), "download button failed"));
+                waitCondition(() -> "ready".equals(updateStatus().optString("state")) || "error".equals(updateStatus().optString("state")), 60000, "APK download did not finish");
+                JSONObject ready = updateStatus();
+                require("ready".equals(ready.optString("state")), "real APK download or checksum verification failed");
+                File root = (File) field("updateDirectory");
+                File apk = new File(root, ready.getString("readyPath"));
+                require(apk.isFile() && apk.length() == ready.getLong("totalBytes"), "downloaded APK missing or truncated");
+                require(NativeBridge.updateVerify(((Number) field("updater")).longValue()), "cached APK reverification failed");
+                currentStep.put("downloadedVersionCode", ready.getInt("versionCode")).put("downloadedBytes", apk.length())
+                        .put("downloadedApkSha256", digestFile(apk.getPath())).put("cancelThenRetryPassed", true)
+                        .put("legacyFileUriRequired", Build.VERSION.SDK_INT < 24);
+                waitCondition(() -> viewField("updateInstall").isShown() && viewField("updateInstall").isEnabled()
+                        && "ready".equals(((JSONObject) field("lastUpdate")).optString("state")), 5000, "install UI did not become ready");
+                main(() -> require(viewField("updateInstall").performClick(), "install button failed"));
+                waitCondition(() -> field("messageDialog") != null, 15000, "development-signature migration was not explained");
+                main(() -> {
+                    android.app.AlertDialog dialog = (android.app.AlertDialog) field("messageDialog");
+                    android.widget.TextView message = dialog.findViewById(android.R.id.message);
+                    require(message != null && message.getText().toString().contains("开发签名"), "wrong signature was not blocked");
+                    dialog.dismiss();
+                });
+                currentStep.put("developmentSignatureBlockedBeforeInstaller", true);
+            }
+            if (!basic) awaitProgress(CHANNELS[2][1], 2);
+            complete();
+        } finally {
+            main(() -> {
+                android.app.Dialog dialog = (android.app.Dialog) field("settingsDialog");
+                if (dialog != null) dialog.dismiss();
+                Field preference = MainActivity.class.getDeclaredField("preferredQuality"); preference.setAccessible(true); preference.set(activity, previousQuality);
+                activity.getPreferences(Activity.MODE_PRIVATE).edit().putString("quality", previousQuality).apply();
+                NativeBridge.quality(session(), previousQuality);
+            });
+        }
     }
 
     /** UI-only diagnostics distinguish an input harness problem from product focus handling. */

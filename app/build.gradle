@@ -52,6 +52,7 @@ def buildRust = tasks.register('buildRust', Exec) {
     })
     inputs.file(rootProject.file('scripts/build-rust-android.py'))
     inputs.file(rootProject.file('scripts/toolchain.py'))
+    inputs.file(project.file('signing-certificate.json'))
     inputs.property('abis', selectedAbis)
     inputs.property('rustFlags', System.getenv('RUSTFLAGS') ?: '')
     inputs.property('toolchain', System.getenv('RUSTUP_TOOLCHAIN') ?: System.getenv('ATV_RUST_TOOLCHAIN') ?: '1.99.1')

@@ -4,7 +4,7 @@ use atv_player::Session;
 use jni::{
     JNIEnv,
     objects::{JClass, JObject, JString},
-    sys::{jint, jlong, jstring},
+    sys::{jboolean, jint, jlong, jstring},
 };
 use std::{
     collections::HashMap,
@@ -20,6 +20,13 @@ use std::{
 static SESSIONS: OnceLock<Mutex<HashMap<i64, Arc<Session>>>> = OnceLock::new();
 static NEXT: AtomicI64 = AtomicI64::new(1);
 static RESOLVER: OnceLock<Mutex<Option<Arc<atv_auth::LiveResolver>>>> = OnceLock::new();
+static UPDATES: OnceLock<Mutex<HashMap<i64, Arc<atv_update::Updater>>>> = OnceLock::new();
+fn updates() -> &'static Mutex<HashMap<i64, Arc<atv_update::Updater>>> {
+    UPDATES.get_or_init(Mutex::default)
+}
+fn update(handle: jlong) -> Option<Arc<atv_update::Updater>> {
+    updates().lock().ok()?.get(&handle).cloned()
+}
 fn resolver(directory: &str) -> Option<Arc<atv_auth::LiveResolver>> {
     let mut shared = RESOLVER.get_or_init(Mutex::default).lock().ok()?;
     if let Some(resolver) = shared.as_ref() {
@@ -151,4 +158,143 @@ pub extern "system" fn Java_cn_bobo_atv_nativeplayer_NativeBridge_status(
             .map(|s| s.into_raw())
             .unwrap_or(ptr::null_mut())
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_cn_bobo_atv_nativeplayer_NativeBridge_quality(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    value: JString,
+) -> jboolean {
+    boundary(|| {
+        let Ok(value) = env.get_string(&value).map(String::from) else {
+            return 0;
+        };
+        let Some(quality) = atv_player::Quality::parse(&value) else {
+            return 0;
+        };
+        session(handle).is_some_and(|s| s.set_quality(quality).is_ok()) as jboolean
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_cn_bobo_atv_nativeplayer_NativeBridge_updateCreate(
+    mut env: JNIEnv,
+    _class: JClass,
+    cache: JString,
+    download: JString,
+    version: jint,
+    api: jint,
+) -> jlong {
+    boundary(|| {
+        if crate::legacy_api::initialize(&env).is_err() || version < 1 || api < 19 {
+            return 0;
+        }
+        let Ok(cache) = env.get_string(&cache).map(String::from) else {
+            return 0;
+        };
+        let Ok(download) = env.get_string(&download).map(String::from) else {
+            return 0;
+        };
+        let identity: serde_json::Value =
+            match serde_json::from_str(include_str!("../../../../app/signing-certificate.json")) {
+                Ok(value) => value,
+                Err(_) => return 0,
+            };
+        let Some(certificate) = identity["certificateSha256"].as_str() else {
+            return 0;
+        };
+        let abi = match std::env::consts::ARCH {
+            "arm" => "armeabi-v7a",
+            "aarch64" => "arm64-v8a",
+            "x86" => "x86",
+            "x86_64" => "x86_64",
+            _ => return 0,
+        };
+        let config = atv_update::Config {
+            current_version: version as u32,
+            api: api as u32,
+            abi: abi.into(),
+            certificate: certificate.into(),
+            cache_dir: Path::new(&cache).to_owned(),
+            download_dir: Path::new(&download).to_owned(),
+        };
+        let Ok(updater) = atv_update::Updater::new(config) else {
+            return 0;
+        };
+        let handle = NEXT.fetch_add(1, Ordering::Relaxed);
+        let Ok(mut registry) = updates().lock() else {
+            return 0;
+        };
+        registry.insert(handle, Arc::new(updater));
+        handle
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_cn_bobo_atv_nativeplayer_NativeBridge_updateCommand(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    action: jint,
+) -> jboolean {
+    boundary(|| {
+        let Some(updater) = update(handle) else {
+            return 0;
+        };
+        (match action {
+            0 => updater.start(false, false),
+            1 => updater.start(true, false),
+            2 => {
+                updater.cancel();
+                true
+            }
+            3 => updater.start(false, true),
+            _ => false,
+        }) as jboolean
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_cn_bobo_atv_nativeplayer_NativeBridge_updateStatus(
+    env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) -> jstring {
+    boundary(|| {
+        let Some(updater) = update(handle) else {
+            return ptr::null_mut();
+        };
+        let Ok(json) = serde_json::to_string(&updater.status()) else {
+            return ptr::null_mut();
+        };
+        env.new_string(json)
+            .map(|s| s.into_raw())
+            .unwrap_or(ptr::null_mut())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_cn_bobo_atv_nativeplayer_NativeBridge_updateVerify(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) -> jboolean {
+    boundary(|| update(handle).is_some_and(|u| u.verify_ready().is_ok()) as jboolean)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_cn_bobo_atv_nativeplayer_NativeBridge_updateDestroy(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) {
+    boundary(|| {
+        if let Ok(mut registry) = updates().lock()
+            && let Some(updater) = registry.remove(&handle)
+        {
+            updater.cancel();
+        }
+    });
 }

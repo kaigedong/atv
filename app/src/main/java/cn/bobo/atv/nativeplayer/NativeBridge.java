@@ -24,4 +24,10 @@ public final class NativeBridge {
     public static native void resume(long handle);
     public static native void destroy(long handle);
     public static native String status(long handle);
+    public static native boolean quality(long handle, String quality);
+    public static native long updateCreate(String cacheDirectory, String downloadDirectory, int version, int api);
+    public static native boolean updateCommand(long handle, int action);
+    public static native String updateStatus(long handle);
+    public static native boolean updateVerify(long handle);
+    public static native void updateDestroy(long handle);
 }

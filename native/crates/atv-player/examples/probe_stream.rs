@@ -43,6 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         match event {
+            Event::Qualities { .. } => continue,
             Event::Resolved {
                 initial_url,
                 preview_seconds,

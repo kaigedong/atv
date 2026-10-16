@@ -114,7 +114,11 @@ Android 继续独立构建：
 ```
 
 仅构建 `atv-android` 及共享库；APK 不携带 SDL / GStreamer 或其插件。
-原 JNI 六个方法、应用 ID 与 Java 原生界面保持兼容。
+原 JNI 六个方法、应用 ID 与 Java 原生界面保持兼容。Android 设置新增清晰度控制和
+五个更新相关 JNI 方法，当前 APK 检查要求全部 12 个导出。
+共享 Rust `atv-update` 负责发布元数据校验、版本与 ABI 选择、后台下载、取消和摘要校验，
+加入 Linux / Windows / macOS 核心测试与 Clippy。Android 的安装包检查、只读 URI 授权和
+系统安装器交接位于 Java 平台适配层；共享库不依赖 JNI、Android SDK 或浏览器。
 
 ## 验证与平台状态
 

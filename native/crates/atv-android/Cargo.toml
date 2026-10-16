@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 atv-player = { path = "../atv-player" }
 atv-auth = { path = "../atv-auth" }
 atv-media = { path = "../atv-media" }
+atv-update = { path = "../atv-update" }
 serde_json.workspace = true
 jni = "0.21.1"
 getrandom-legacy = { package = "getrandom", version = "0.2.17", optional = true }

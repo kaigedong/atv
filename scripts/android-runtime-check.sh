@@ -6,7 +6,7 @@ source "$project_dir/scripts/toolchain-env.sh"
 serial="${ATV_TEST_DEVICE:-emulator-5570}"
 mode="${ATV_TEST_MODE:-smoke}"
 duration="${ATV_TEST_DURATION_SECONDS:-600}"
-case "$mode" in smoke|soak|lifecycle|retry|remote|network|all|component) ;; *) echo 'Unsupported native test mode.' >&2; exit 1 ;; esac
+case "$mode" in smoke|soak|lifecycle|retry|remote|network|all|component|settings|settings-basic) ;; *) echo 'Unsupported native test mode.' >&2; exit 1 ;; esac
 artifact_dir="${ATV_TEST_ARTIFACTS:-$project_dir/test-artifacts/native/$mode}"
 adb_command="$ANDROID_HOME/platform-tools/adb"
 mkdir -p "$artifact_dir"

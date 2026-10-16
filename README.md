@@ -2,6 +2,11 @@
 
 默认 Android 工程是根目录 `app/`，直播核心使用 Rust，界面使用 Android 原生控件与少量 Java/JNI。生产运行不依赖 JS、WebView、官方 WASM 或脚本引擎。
 
+Android 设置：遥控器菜单键或全屏右键打开，也可选择顶部“设置”按钮；返回键先关闭设置。
+清晰度只列出频道返回的可用视频档位，显示实际分辨率并保存偏好，切换时重新连接直播。
+设置内可检查、下载并安装更新；每天自动检查一次，下载与安装需要手动确认。
+版本检查、分块下载和 SHA-256 校验由共享 Rust `atv-update` 完成，Android 负责包签名检查与系统安装器。
+
 ## 自动构建与下载
 
 推送 `main`、提交 PR 或手动运行 [GitHub Actions](https://github.com/kaigedong/atv/actions/workflows/native-portability.yml) 会执行发布检查、测试和多平台构建。

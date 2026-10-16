@@ -10,7 +10,7 @@ from toolchain import rust_environment
 
 root = Path(__file__).resolve().parent.parent
 crates = root / "native/crates"
-shared = {"atv-core", "atv-auth", "atv-cmg", "atv-media", "atv-player"}
+shared = {"atv-core", "atv-auth", "atv-cmg", "atv-media", "atv-player", "atv-update"}
 adapters = {"atv-android", "atv-desktop", "atv-apple"}
 # The default Android project must be the native one, not a parallel legacy app.
 for legacy in ["package.json", "package-lock.json", "web/index.html", "native-android/settings.gradle",

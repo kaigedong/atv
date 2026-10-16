@@ -2,6 +2,8 @@ package cn.bobo.atv.nativeplayer;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.graphics.Color;
 import android.media.AudioManager;
 import android.os.Build;
@@ -23,6 +25,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 
@@ -31,6 +34,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +55,21 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private OnBackInvokedCallback backCallback;
     private int videoWidth, videoHeight;
     private long lastStatusLog;
+    private Button settingsButton, qualityButton, updateCheck, updateDownload, updateInstall, updateCancel;
+    private TextView qualitySummary, updateSummary;
+    private Dialog settingsDialog;
+    private AlertDialog qualityDialog, messageDialog;
+    private JSONObject lastPlayback = new JSONObject(), lastUpdate = new JSONObject();
+    private String preferredQuality = "auto";
+    private long updater;
+    private File updateDirectory;
+    private boolean installing, automaticCheckStarted;
+    private final Runnable automaticCheck = () -> {
+        if (updater != 0 && resumed && !automaticCheckStarted) {
+            automaticCheckStarted = true;
+            NativeBridge.updateCommand(updater, 3);
+        }
+    };
 
     private final Runnable poll = new Runnable() {
         @Override public void run() {
@@ -59,6 +78,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 catch (RuntimeException | LinkageError | org.json.JSONException error) {
                     showError(getString(R.string.native_failure));
                 }
+            }
+            if (updater != 0) {
+                try { lastUpdate = new JSONObject(NativeBridge.updateStatus(updater)); refreshSettings(); }
+                catch (RuntimeException | LinkageError | org.json.JSONException error) { }
             }
             if (resumed) handler.postDelayed(this, 500);
         }
@@ -76,6 +99,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         topbar.setGravity(Gravity.CENTER_VERTICAL);
         title = text("ATV · 电视直播", 22);
         topbar.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1));
+        settingsButton = button(getString(R.string.settings));
+        settingsButton.setOnClickListener(view -> openSettings());
+        topbar.addView(settingsButton);
         Button full = button(getString(R.string.fullscreen));
         full.setId(View.generateViewId());
         full.setOnClickListener(view -> setFullscreen(!fullscreen));
@@ -126,6 +152,16 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         root.addView(hint, new LinearLayout.LayoutParams(-1, dp(28)));
 
         loadChannels();
+        preferredQuality = getPreferences(MODE_PRIVATE).getString("quality", "auto");
+        if (!java.util.Arrays.asList("auto", "sd", "hd", "shd", "fhd").contains(preferredQuality)) preferredQuality = "auto";
+        if (NativeBridge.available()) {
+            File privateUpdates = new File(getFilesDir(), "updates");
+            updateDirectory = Build.VERSION.SDK_INT < 24 ? getExternalFilesDir("updates") : privateUpdates;
+            if (updateDirectory == null) updateDirectory = privateUpdates;
+            try { updater = NativeBridge.updateCreate(privateUpdates.getAbsolutePath(), updateDirectory.getAbsolutePath(),
+                    BuildConfig.VERSION_CODE, Build.VERSION.SDK_INT); }
+            catch (RuntimeException | LinkageError error) { updater = 0; }
+        }
         String remembered = state == null
                 ? getPreferences(MODE_PRIVATE).getString("pid", "") : state.getString("pid", "");
         for (Channel channel : channels) if (channel.pid.equals(remembered)) selected = channel;
@@ -196,6 +232,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             session = NativeBridge.create(holder.getSurface(), sampleRate, getFilesDir().getAbsolutePath());
             if (session == 0) { showError(getString(R.string.native_failure)); return; }
             if (!resumed) NativeBridge.pause(session);
+            NativeBridge.quality(session, preferredQuality);
             select(selected);
         } catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
     }
@@ -204,6 +241,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     @Override public void surfaceDestroyed(SurfaceHolder holder) { releaseSession(); }
 
     private void showStatus(JSONObject state) {
+        lastPlayback = state;
+        refreshSettings();
         if (BuildConfig.DEBUG && SystemClock.elapsedRealtime() - lastStatusLog >= 5000) {
             lastStatusLog = SystemClock.elapsedRealtime();
             Log.i("ATVNative", state.toString());
@@ -248,6 +287,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
 
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS
+                || (fullscreen && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            if (event.getRepeatCount() == 0) openSettings();
+            return true;
+        }
         if (fullscreen && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             List<Channel> list = new ArrayList<>();
             for (Channel channel : channels) if (selected != null && channel.group.equals(selected.group)) list.add(channel);
@@ -261,7 +305,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         return super.onKeyDown(keyCode, event);
     }
 
-    private void handleBack() { if (fullscreen) setFullscreen(false); else finish(); }
+    private void handleBack() {
+        if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
+        else if (fullscreen) setFullscreen(false); else finish();
+    }
     @SuppressLint("GestureBackNavigation") // API 33+ uses the native dispatcher above.
     @SuppressWarnings("deprecation")
     @Override public void onBackPressed() { handleBack(); }
@@ -271,9 +318,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (session != 0) try { NativeBridge.resume(session); }
         catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
         handler.post(poll); hideSystemBars();
+        if (!automaticCheckStarted) handler.postDelayed(automaticCheck, 10000);
     }
     @Override protected void onPause() {
         resumed = false; handler.removeCallbacks(poll);
+        handler.removeCallbacks(automaticCheck);
         if (session != 0) try { NativeBridge.pause(session); }
         catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
         super.onPause();
@@ -283,6 +332,12 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         super.onSaveInstanceState(state);
     }
     @Override protected void onDestroy() {
+        handler.removeCallbacks(automaticCheck);
+        if (qualityDialog != null) qualityDialog.dismiss();
+        if (messageDialog != null) messageDialog.dismiss();
+        if (settingsDialog != null) settingsDialog.dismiss();
+        long oldUpdater = updater; updater = 0;
+        if (oldUpdater != 0) try { NativeBridge.updateDestroy(oldUpdater); } catch (RuntimeException | LinkageError ignored) { }
         handler.removeCallbacks(poll); releaseSession();
         if (Build.VERSION.SDK_INT >= 33 && backCallback != null)
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
@@ -309,6 +364,170 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(Color.WHITE); return view;
     }
     private Button button(String value) { Button view = new Button(this); view.setText(value); return view; }
+
+    private void openSettings() {
+        if (settingsDialog != null && settingsDialog.isShowing()) return;
+        final View previousFocus = getCurrentFocus();
+        settingsDialog = new Dialog(this);
+        settingsDialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(12), dp(24), dp(12));
+        content.setBackgroundColor(Color.rgb(27, 29, 35));
+        content.addView(text("设置", 24));
+        qualitySummary = text("正在读取直播信息…", 17);
+        content.addView(qualitySummary);
+        qualityButton = button("选择清晰度");
+        qualityButton.setOnClickListener(view -> chooseQuality());
+        content.addView(qualityButton, new LinearLayout.LayoutParams(-1, dp(48)));
+        content.addView(text("软件更新", 21));
+        content.addView(text("当前版本：" + BuildConfig.VERSION_NAME + "（" + BuildConfig.VERSION_CODE + "）", 16));
+        content.addView(text("每天自动检查一次；下载和安装需手动确认", 14));
+        updateSummary = text("尚未检查更新", 16);
+        content.addView(updateSummary);
+        updateCheck = button("检查更新");
+        updateCheck.setOnClickListener(view -> updateCommand(0));
+        content.addView(updateCheck, new LinearLayout.LayoutParams(-1, dp(48)));
+        updateDownload = button("下载更新");
+        updateDownload.setOnClickListener(view -> updateCommand(1));
+        content.addView(updateDownload, new LinearLayout.LayoutParams(-1, dp(48)));
+        updateInstall = button("安装更新");
+        updateInstall.setOnClickListener(view -> installUpdate());
+        content.addView(updateInstall, new LinearLayout.LayoutParams(-1, dp(48)));
+        updateCancel = button("取消更新任务");
+        updateCancel.setOnClickListener(view -> updateCommand(2));
+        content.addView(updateCancel, new LinearLayout.LayoutParams(-1, dp(48)));
+        Button close = button("返回直播");
+        close.setOnClickListener(view -> settingsDialog.dismiss());
+        content.addView(close, new LinearLayout.LayoutParams(-1, dp(48)));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        settingsDialog.setContentView(scroll);
+        settingsDialog.setOnKeyListener((dialog, key, event) -> {
+            if ((key == KeyEvent.KEYCODE_MENU || key == KeyEvent.KEYCODE_SETTINGS) && event.getAction() == KeyEvent.ACTION_DOWN) {
+                dialog.dismiss(); return true;
+            }
+            return false;
+        });
+        settingsDialog.setOnDismissListener(dialog -> {
+            settingsDialog = null;
+            qualitySummary = updateSummary = null;
+            qualityButton = updateCheck = updateDownload = updateInstall = updateCancel = null;
+            if (previousFocus != null && previousFocus.isShown()) previousFocus.requestFocus();
+            hideSystemBars();
+        });
+        settingsDialog.show();
+        if (settingsDialog.getWindow() != null) {
+            android.util.DisplayMetrics display = getResources().getDisplayMetrics();
+            settingsDialog.getWindow().setLayout(Math.min(display.widthPixels - dp(32), dp(680)),
+                    Math.min(display.heightPixels - dp(24), dp(520)));
+        }
+        refreshSettings();
+        qualityButton.requestFocus();
+    }
+
+    private String qualityLabel(String id) {
+        switch (id) {
+            case "sd": return "标清";
+            case "hd": return "高清";
+            case "shd": return "超清";
+            case "fhd": return "蓝光";
+            default: return "自动（优先流畅）";
+        }
+    }
+    private void chooseQuality() {
+        List<String> ids = new ArrayList<>(); ids.add("auto");
+        JSONArray available = lastPlayback.optJSONArray("availableQualities");
+        if (available != null) for (int i = 0; i < available.length(); i++) {
+            String id = available.optString(i);
+            if (java.util.Arrays.asList("sd", "hd", "shd", "fhd").contains(id) && !ids.contains(id)) ids.add(id);
+        }
+        String[] labels = new String[ids.size()];
+        for (int i = 0; i < ids.size(); i++) labels[i] = qualityLabel(ids.get(i));
+        qualityDialog = new AlertDialog.Builder(this).setTitle("频道可用清晰度")
+                .setSingleChoiceItems(labels, Math.max(0, ids.indexOf(preferredQuality)), (choice, index) -> {
+                    String quality = ids.get(index);
+                    if (session != 0 && !NativeBridge.quality(session, quality)) {
+                        Toast.makeText(this, "清晰度切换失败，请重试", Toast.LENGTH_SHORT).show(); return;
+                    }
+                    preferredQuality = quality;
+                    getPreferences(MODE_PRIVATE).edit().putString("quality", quality).apply();
+                    choice.dismiss(); refreshSettings();
+                }).setNegativeButton("返回", null).create();
+        qualityDialog.setOnDismissListener(dialog -> { qualityDialog = null; if (qualityButton != null) qualityButton.requestFocus(); });
+        qualityDialog.show();
+    }
+
+    private void refreshSettings() {
+        String phase = lastUpdate.optString("state", "idle");
+        boolean available = "available".equals(phase), ready = "ready".equals(phase);
+        if (settingsButton != null) setTextChanged(settingsButton, available || ready ? "设置 · 有更新" : getString(R.string.settings));
+        if (settingsDialog == null || qualitySummary == null) return;
+        String actual = lastPlayback.optString("effectiveQuality", "");
+        int width = lastPlayback.optInt("videoWidth"), height = lastPlayback.optInt("videoHeight");
+        String details = "偏好：" + qualityLabel(preferredQuality) + "\n当前："
+                + (actual.isEmpty() ? "正在获取直播档位" : qualityLabel(actual));
+        if (width > 0 && height > 0) details += " · " + width + " × " + height;
+        setTextChanged(qualitySummary, details);
+        boolean busy = "checking".equals(phase) || "downloading".equals(phase) || "verifying".equals(phase) || "cancelling".equals(phase);
+        String message = updater == 0 ? "更新组件不可用" : lastUpdate.optString("message", "尚未检查更新");
+        if (available || ready || "downloading".equals(phase)) message += "\n新版本：" + lastUpdate.optString("versionName");
+        if ("downloading".equals(phase)) message += String.format(java.util.Locale.ROOT, "\n%.1f / %.1f MiB",
+                lastUpdate.optLong("downloadedBytes") / 1048576.0, lastUpdate.optLong("totalBytes") / 1048576.0);
+        setTextChanged(updateSummary, message);
+        updateCheck.setEnabled(updater != 0 && !busy && !installing);
+        updateDownload.setVisibility(available ? View.VISIBLE : View.GONE);
+        updateDownload.setEnabled(!installing);
+        updateInstall.setVisibility(ready ? View.VISIBLE : View.GONE);
+        updateInstall.setEnabled(!installing);
+        updateCancel.setVisibility(busy ? View.VISIBLE : View.GONE);
+        updateCancel.setEnabled(!"cancelling".equals(phase));
+    }
+    private void updateCommand(int command) {
+        if (updater == 0) return;
+        NativeBridge.updateCommand(updater, command);
+        try { lastUpdate = new JSONObject(NativeBridge.updateStatus(updater)); } catch (org.json.JSONException ignored) { }
+        refreshSettings();
+    }
+    private void installUpdate() {
+        if (installing || updater == 0 || !"ready".equals(lastUpdate.optString("state"))) return;
+        installing = true; refreshSettings();
+        final long handle = updater;
+        final String relative = lastUpdate.optString("readyPath"), certificate = lastUpdate.optString("certificateSha256");
+        final int version = lastUpdate.optInt("versionCode");
+        new Thread(() -> {
+            try {
+                if (!NativeBridge.updateVerify(handle)) throw new UpdateInstaller.Failure("安装包校验失败，请重新下载");
+                File file = UpdateInstaller.inspect(this, updateDirectory, relative, version, certificate);
+                handler.post(() -> {
+                    installing = false;
+                    if (isFinishing() || isDestroyed()) return;
+                    try {
+                        boolean permission = Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls();
+                        UpdateInstaller.launch(this, file, relative);
+                        if (permission) Toast.makeText(this, "请允许安装更新，返回后再点击安装", Toast.LENGTH_LONG).show();
+                    } catch (RuntimeException error) { updateMessage("无法打开系统安装器或授权页面"); }
+                    refreshSettings();
+                });
+            } catch (Exception error) {
+                String message = error instanceof UpdateInstaller.Failure ? error.getMessage() : "无法验证安装包，请重新下载";
+                handler.post(() -> {
+                    installing = false;
+                    if (!isFinishing() && !isDestroyed()) updateMessage(message);
+                    refreshSettings();
+                });
+            }
+        }, "atv-install").start();
+    }
+    private void updateMessage(String message) {
+        if (messageDialog != null) messageDialog.dismiss();
+        messageDialog = new AlertDialog.Builder(this).setMessage(message).setPositiveButton("返回", null).create();
+        messageDialog.setOnDismissListener(dialog -> { messageDialog = null; if (updateInstall != null && updateInstall.isShown()) updateInstall.requestFocus(); });
+        messageDialog.show();
+    }
+    private void setTextChanged(TextView view, String value) {
+        if (!android.text.TextUtils.equals(view.getText(), value)) view.setText(value);
+    }
 
     private static final class Channel {
         final String pid, streamId, name, group;

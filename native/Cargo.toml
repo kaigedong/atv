@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/atv-core", "crates/atv-android", "crates/atv-auth", "crates/atv-cmg", "crates/atv-media", "crates/atv-player", "crates/atv-desktop", "crates/atv-apple", "tests/android-output-probe"]
+members = ["crates/atv-core", "crates/atv-android", "crates/atv-auth", "crates/atv-cmg", "crates/atv-media", "crates/atv-player", "crates/atv-update", "crates/atv-desktop", "crates/atv-apple", "tests/android-output-probe"]
 # Android builds and portable core tests need no desktop multimedia SDK.
-default-members = ["crates/atv-core", "crates/atv-android", "crates/atv-auth", "crates/atv-cmg", "crates/atv-media", "crates/atv-player"]
+default-members = ["crates/atv-core", "crates/atv-android", "crates/atv-auth", "crates/atv-cmg", "crates/atv-media", "crates/atv-player", "crates/atv-update"]
 
 [workspace.package]
 version = "0.1.0"

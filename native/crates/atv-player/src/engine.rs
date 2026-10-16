@@ -1,4 +1,5 @@
 //! Portable live playback policy; platform outputs are created and owned on one thread.
+use crate::Quality;
 use crate::playback::{
     self, AccessUnit, BufferStats, Event, MediaFragment, MediaProcessor, PlaybackError, Status,
 };
@@ -19,6 +20,16 @@ use std::{
 /// Authorization/download provider. Implementations must honor cancellation and
 /// bounded sends, and must never publish a stream after server permission denial.
 pub trait LiveSource: Send + Sync + 'static {
+    fn acquire_quality(
+        &self,
+        pid: &str,
+        stream_id: &str,
+        _quality: Quality,
+        cancel: &Cancellation,
+        events: &mpsc::SyncSender<Event>,
+    ) {
+        self.acquire(pid, stream_id, cancel, events);
+    }
     fn acquire(
         &self,
         pid: &str,
@@ -28,6 +39,16 @@ pub trait LiveSource: Send + Sync + 'static {
     );
 }
 impl LiveSource for LiveResolver {
+    fn acquire_quality(
+        &self,
+        pid: &str,
+        stream_id: &str,
+        quality: Quality,
+        cancel: &Cancellation,
+        events: &mpsc::SyncSender<Event>,
+    ) {
+        playback::acquire_quality(self, pid, stream_id, quality, cancel, events);
+    }
     fn acquire(
         &self,
         pid: &str,
@@ -67,6 +88,7 @@ pub struct Player<F: OutputFactory> {
     pending_start: bool,
     count: Arc<AtomicUsize>,
     status: Status,
+    quality: Quality,
 }
 impl<F: OutputFactory> Player<F> {
     pub fn new(factory: F, source: Arc<dyn LiveSource>) -> Self {
@@ -81,18 +103,29 @@ impl<F: OutputFactory> Player<F> {
                 .get_or_init(|| Arc::new(AtomicUsize::new(0)))
                 .clone(),
             status: Status::default(),
+            quality: Quality::Auto,
         }
     }
     pub fn select(&mut self, pid: String, stream_id: String) -> Result<(), ControlError> {
         validate_channel(&pid, &stream_id)?;
         self.run.take();
         self.status = Status::loading(pid.clone());
+        self.status.requested_quality = self.quality.id();
         if self.paused {
             self.status.state = "paused";
         }
         self.selected = Some((pid, stream_id));
         self.pending_start = !self.paused;
         Ok(())
+    }
+    pub fn set_quality(&mut self, quality: Quality) {
+        if self.quality != quality {
+            self.quality = quality;
+            if let Some((pid, stream)) = self.selected.clone() {
+                let _ = self.select(pid, stream);
+            }
+            self.status.requested_quality = quality.id();
+        }
     }
     pub fn pause(&mut self) {
         self.paused = true;
@@ -107,6 +140,7 @@ impl<F: OutputFactory> Player<F> {
             self.pending_start = self.selected.is_some();
             if let Some((pid, _)) = &self.selected {
                 self.status = Status::loading(pid.clone());
+                self.status.requested_quality = self.quality.id();
             }
         }
     }
@@ -126,7 +160,13 @@ impl<F: OutputFactory> Player<F> {
         {
             self.pending_start = false;
             if let Some((pid, stream_id)) = &self.selected {
-                match Run::new(self.source.clone(), pid.clone(), stream_id.clone(), guard) {
+                match Run::new(
+                    self.source.clone(),
+                    pid.clone(),
+                    stream_id.clone(),
+                    self.quality,
+                    guard,
+                ) {
                     Ok(run) => self.run = Some(run),
                     Err(error) => self.status.fail(&error),
                 }
@@ -152,6 +192,7 @@ impl<F: OutputFactory> Drop for Player<F> {
 }
 
 enum Command {
+    Quality(Quality),
     Select { pid: String, stream_id: String },
     Pause,
     Resume,
@@ -184,6 +225,7 @@ impl Session {
                                     let _ = player.select(pid, stream_id);
                                 }
                                 Ok(Command::Pause) => player.pause(),
+                                Ok(Command::Quality(quality)) => player.set_quality(quality),
                                 Ok(Command::Resume) => player.resume(),
                                 Err(TryRecvError::Empty) => break,
                             }
@@ -215,6 +257,11 @@ impl Session {
     pub fn pause(&self) -> Result<(), ControlError> {
         self.commands
             .send(Command::Pause)
+            .map_err(|_| ControlError::Stopped)
+    }
+    pub fn set_quality(&self, quality: Quality) -> Result<(), ControlError> {
+        self.commands
+            .send(Command::Quality(quality))
             .map_err(|_| ControlError::Stopped)
     }
     pub fn resume(&self) -> Result<(), ControlError> {
@@ -250,6 +297,8 @@ impl Drop for WorkerCount {
     }
 }
 struct Run {
+    effective_quality: &'static str,
+    available_qualities: Vec<&'static str>,
     cancel: Cancellation,
     events: Receiver<Event>,
     initial_url: String,
@@ -275,6 +324,7 @@ impl Run {
         source: Arc<dyn LiveSource>,
         pid: String,
         stream_id: String,
+        quality: Quality,
         guard: WorkerCount,
     ) -> Result<Self, PlaybackError> {
         let cancel = Cancellation::default();
@@ -284,10 +334,12 @@ impl Run {
             .name("atv-network".into())
             .spawn(move || {
                 let _guard = guard;
-                source.acquire(&pid, &stream_id, &worker_cancel, &tx);
+                source.acquire_quality(&pid, &stream_id, quality, &worker_cancel, &tx);
             })
             .map_err(|_| PlaybackError::Network)?;
         Ok(Self {
+            effective_quality: "",
+            available_qualities: Vec::new(),
             cancel,
             events,
             initial_url: String::new(),
@@ -358,6 +410,16 @@ impl Run {
         // batches of the active fragment as the output accepts more input.
         if self.packets.is_empty() && self.fragment.is_none() {
             match self.events.try_recv() {
+                Ok(Event::Qualities {
+                    effective,
+                    available,
+                }) => {
+                    self.effective_quality = Quality::parse(&effective).map_or("", Quality::id);
+                    self.available_qualities = available
+                        .iter()
+                        .filter_map(|q| Quality::parse(q).map(Quality::id))
+                        .collect();
+                }
                 Ok(Event::Resolved {
                     initial_url,
                     preview_seconds,
@@ -461,6 +523,10 @@ impl Run {
         };
     }
     fn publish(&self, status: &mut Status) {
+        status.effective_quality = self.effective_quality;
+        status
+            .available_qualities
+            .clone_from(&self.available_qualities);
         status.buffers = self.buffers.clone();
         status.video_frames = self.stats.video_frames;
         status.audio_frames = self.stats.audio_frames;
@@ -508,8 +574,20 @@ mod tests {
         active: AtomicUsize,
         maximum: AtomicUsize,
         calls: AtomicUsize,
+        qualities: Mutex<Vec<Quality>>,
     }
     impl LiveSource for Source {
+        fn acquire_quality(
+            &self,
+            pid: &str,
+            stream: &str,
+            quality: Quality,
+            cancel: &Cancellation,
+            events: &mpsc::SyncSender<Event>,
+        ) {
+            self.qualities.lock().unwrap().push(quality);
+            self.acquire(pid, stream, cancel, events);
+        }
         fn acquire(
             &self,
             _: &str,
@@ -603,6 +681,34 @@ mod tests {
             source,
             outputs,
         )
+    }
+    #[test]
+    fn preference_reaches_source_and_survives_pause_resume() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        player.set_quality(Quality::Shd);
+        player.select("1".into(), "2".into()).unwrap();
+        wait(|| {
+            player.tick();
+            player.status().state == "playing"
+        });
+        assert_eq!(*source.qualities.lock().unwrap(), [Quality::Shd]);
+        player.pause();
+        player.set_quality(Quality::Fhd);
+        wait(|| source.active.load(Ordering::SeqCst) == 0);
+        assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+        player.resume();
+        wait(|| {
+            player.tick();
+            player.status().state == "playing"
+        });
+        assert_eq!(
+            *source.qualities.lock().unwrap(),
+            [Quality::Shd, Quality::Fhd]
+        );
+        assert_eq!(player.status().requested_quality, "fhd");
+        player.stop();
+        wait(|| source.active.load(Ordering::SeqCst) == 0);
     }
     #[test]
     fn main_thread_output_lifetime_pause_resume_and_validation() {
@@ -787,7 +893,8 @@ mod tests {
         let source = Arc::new(Source::default());
         let count = Arc::new(AtomicUsize::new(0));
         let guard = WorkerCount::try_acquire(&count).unwrap();
-        let mut run = Run::new(source.clone(), "1".into(), "2".into(), guard).unwrap();
+        let mut run =
+            Run::new(source.clone(), "1".into(), "2".into(), Quality::Auto, guard).unwrap();
         let mut factory = Factory {
             outputs: Rc::new(RefCell::new(0)),
             audio: true,

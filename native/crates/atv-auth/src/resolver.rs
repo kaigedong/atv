@@ -69,6 +69,35 @@ pub struct LiveInfo {
     pub extra_info: Value,
 }
 impl LiveInfo {
+    pub fn definition_height(&self) -> Option<u32> {
+        self.formats
+            .as_array()?
+            .iter()
+            .find(|format| format["fn"] == self.definition)?["defnrate"]
+            .as_str()?
+            .strip_suffix('P')?
+            .parse::<u32>()
+            .ok()
+            .filter(|height| *height > 0 && *height <= 4320)
+    }
+    /// Only server-advertised video definitions; audio-only formats are not TV video choices.
+    pub fn definitions(&self) -> Vec<String> {
+        let valid = |value: &str| matches!(value, "sd" | "hd" | "shd" | "fhd");
+        let mut definitions = Vec::new();
+        if let Some(formats) = self.formats.as_array() {
+            for format in formats {
+                if let Some(id) = format["fn"].as_str().filter(|id| valid(id))
+                    && !definitions.iter().any(|existing| existing == id)
+                {
+                    definitions.push(id.to_owned());
+                }
+            }
+        }
+        if valid(&self.definition) && !definitions.contains(&self.definition) {
+            definitions.push(self.definition.clone());
+        }
+        definitions
+    }
     pub fn url(&self) -> &str {
         &self.url
     }

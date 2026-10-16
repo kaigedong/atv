@@ -57,9 +57,9 @@ jobs:
       - run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
       - run: cargo fmt --manifest-path native/Cargo.toml --all -- --check
       - name: Portable tests
-        run: cargo test --locked --manifest-path native/Cargo.toml -p atv-core -p atv-auth -p atv-cmg -p atv-media -p atv-player -p atv-apple
+        run: cargo test --locked --manifest-path native/Cargo.toml -p atv-core -p atv-auth -p atv-cmg -p atv-media -p atv-player -p atv-update -p atv-apple
       - name: Portable Clippy
-        run: cargo clippy --locked --manifest-path native/Cargo.toml -p atv-core -p atv-auth -p atv-cmg -p atv-media -p atv-player -p atv-apple --all-targets -- -D warnings
+        run: cargo clippy --locked --manifest-path native/Cargo.toml -p atv-core -p atv-auth -p atv-cmg -p atv-media -p atv-player -p atv-update -p atv-apple --all-targets -- -D warnings
       - run: python scripts/check-native-architecture.py
       - name: Link and execute the real C ABI consumer
         if: runner.os == 'Linux'

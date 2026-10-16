@@ -73,7 +73,8 @@ def elf_summary(data, expected_machine):
     if expected_machine in (3, 40) and set(dependencies) & {"libmediandk.so", "libaaudio.so"}:
         raise ValueError("API 19 library requires newer system media libraries")
     for name in (b"Java_cn_bobo_atv_nativeplayer_NativeBridge_" + method
-                 for method in (b"create", b"select", b"pause", b"resume", b"destroy", b"status")):
+                 for method in (b"create", b"select", b"pause", b"resume", b"destroy", b"status", b"quality",
+                                b"updateCreate", b"updateCommand", b"updateStatus", b"updateVerify", b"updateDestroy")):
         if name + b"\x00" not in data:
             raise ValueError("native JNI symbol is missing")
     return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),

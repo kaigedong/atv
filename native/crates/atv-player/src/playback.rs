@@ -1,5 +1,6 @@
 //! Rust-owned authorization, bounded HLS acquisition and elementary media processing.
 //! Network work runs separately from the short-latency native output worker.
+use crate::Quality;
 use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
 use atv_auth::{LiveResolver, ResolveError};
 use atv_cmg::CmgSession;
@@ -21,6 +22,9 @@ use url::Url;
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
+    pub requested_quality: &'static str,
+    pub effective_quality: &'static str,
+    pub available_qualities: Vec<&'static str>,
     pub state: &'static str,
     pub pid: String,
     pub position_ms: u64,
@@ -54,6 +58,9 @@ pub struct BufferStats {
 impl Default for Status {
     fn default() -> Self {
         Self {
+            requested_quality: "auto",
+            effective_quality: "",
+            available_qualities: Vec::new(),
             state: "idle",
             pid: String::new(),
             position_ms: 0,
@@ -150,6 +157,10 @@ impl From<ResolveError> for PlaybackError {
 
 // No Debug implementation: even diagnostic formatting must not expose the URL.
 pub enum Event {
+    Qualities {
+        effective: String,
+        available: Vec<String>,
+    },
     Resolved {
         initial_url: String,
         preview_seconds: u64,
@@ -198,7 +209,17 @@ pub fn acquire(
     cancel: &Cancellation,
     tx: &SyncSender<Event>,
 ) {
-    if let Err(error) = acquire_inner(resolver, pid, stream_id, cancel, tx)
+    acquire_quality(resolver, pid, stream_id, Quality::Auto, cancel, tx);
+}
+pub fn acquire_quality(
+    resolver: &LiveResolver,
+    pid: &str,
+    stream_id: &str,
+    quality: Quality,
+    cancel: &Cancellation,
+    tx: &SyncSender<Event>,
+) {
+    if let Err(error) = acquire_inner(resolver, pid, stream_id, quality, cancel, tx)
         && !cancel.cancelled()
     {
         let _ = send(tx, cancel, Event::Failed(error));
@@ -208,11 +229,17 @@ fn acquire_inner(
     resolver: &LiveResolver,
     pid: &str,
     stream_id: &str,
+    quality: Quality,
     cancel: &Cancellation,
     tx: &SyncSender<Event>,
 ) -> Result<(), PlaybackError> {
-    let info =
-        resolver.resolve_quality_cancellable(pid, stream_id, "hd", 1, cancel.flag().as_ref())?;
+    let info = resolver.resolve_quality_cancellable(
+        pid,
+        stream_id,
+        quality.request(),
+        1,
+        cancel.flag().as_ref(),
+    )?;
     cancel.check()?;
     let mut url = Url::parse(info.url()).map_err(|_| PlaybackError::Playlist)?;
     send(
@@ -222,6 +249,14 @@ fn acquire_inner(
             initial_url: info.url().to_owned(),
             preview_seconds: info.preview_seconds,
             expires_unix_seconds: paid_deadline(&info.extra_info)?,
+        },
+    )?;
+    send(
+        tx,
+        cancel,
+        Event::Qualities {
+            effective: info.definition.clone(),
+            available: info.definitions(),
         },
     )?;
     let client = HttpClient::new("ATV-Native/0.1 (Android TV; Rust)")?;
@@ -261,7 +296,9 @@ fn acquire_inner(
                 if master_depth > 4 {
                     return Err(PlaybackError::Playlist);
                 }
-                let variant = hls::choose_hd(&variants).ok_or(PlaybackError::Playlist)?;
+                let variant = quality
+                    .choose_with_height(&variants, info.definition_height())
+                    .ok_or(PlaybackError::Playlist)?;
                 // External audio playlists and fragmented MP4 require a separate demux path.
                 // Explicit failure prevents a silent video-only success claim.
                 if variant.audio.is_some() {
