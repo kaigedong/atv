@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "alias": "atv-release",
+  "keystoreType": "PKCS12",
+  "certificateSha256": "e94f516f7e6a56a24fa286e3e9f6038405284fee39d6a61fb74bc1061145cd6d",
+  "subject": "CN=ATV Release,O=ATV",
+  "notAfter": "2076-10-16T06:49:54+00:00",
+  "keyAlgorithm": "RSA",
+  "keyBits": 3072
+}

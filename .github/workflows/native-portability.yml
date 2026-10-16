@@ -104,6 +104,49 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+  android-release-sign:
+    if: github.repository == 'kaigedong/atv' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [publication-audit, shared-core, android-native-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: android-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: atv-android
+          path: ci-dist/android/
+      - name: Install APK signing tools
+        run: python scripts/ci-install-android.py --signing-tools-only
+      - name: Sign and verify all five APK variants
+        env:
+          ATV_ANDROID_KEYSTORE_BASE64: ${{ secrets.ATV_ANDROID_KEYSTORE_BASE64 }}
+          ATV_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ATV_ANDROID_KEYSTORE_PASSWORD }}
+        run: python scripts/ci-sign-android.py
+      - name: Remove temporary signing files even after cancellation
+        if: always()
+        shell: python
+        run: |
+          import os, pathlib, shutil
+          for directory in pathlib.Path(os.environ["RUNNER_TEMP"]).glob("atv-android-sign-*"):
+              shutil.rmtree(directory)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: atv-android-signed
+          path: ci-dist/android-signed/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
   linux-desktop-build:
     needs: publication-audit
     strategy:

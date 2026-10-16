@@ -7,6 +7,7 @@
 推送 `main`、提交 PR 或手动运行 [GitHub Actions](https://github.com/kaigedong/atv/actions/workflows/native-portability.yml) 会执行发布检查、测试和多平台构建。
 在成功运行页面的 **Artifacts** 中下载 Android 通用及单 ABI APK、Linux 原生宿主、macOS / iOS / tvOS 应用归档。
 Android 支持 `armeabi-v7a`、`arm64-v8a`、`x86`、`x86_64`；Apple 包默认未签名，真机安装需要自己的签名配置。
+main 另外生成 `atv-android-signed`，提供使用固定项目密钥签名的五种 Android release APK；密钥仅存于 GitHub Environment Secrets。
 具体目标、产物与限制见 [自动构建](docs/ci.md)，公开内容审查规则见 [发布与隐私](docs/publication.md)。
 
 已验证的 [完整成功构建](https://github.com/kaigedong/atv/actions/runs/38859480388) 包含 12 项通过的检查与 8 个下载 artifact；编译通过与真机播放验收分别记录。

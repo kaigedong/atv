@@ -28,8 +28,10 @@
 CI 只上传明确指定的全新构建产物，不上传整个工作目录、缓存或运行鉴权数据。
 
 Android debug key 由 runner 临时生成，仅用于试装；keystore 不上传。
-Release APK 与 Apple 应用默认不使用个人签名凭证。需要稳定升级签名时，应在本地
-对 unsigned 产物签名，或另行配置经过审查的 CI signing secrets。
+Android 正式 release 使用 GitHub `android-release` Environment 中的专用项目签名密钥，
+仅 main 的独立任务可读取；源码只公开证书指纹，私钥与密码不在本地或 Git 中保存。
+runner 为签名临时还原密钥，使用后清理；产物不含密钥库，PR 不接触 Secrets。
+Apple 应用继续不使用个人签名凭证。详见 [固定签名配置](ci.md#android-固定发布签名)。
 
 ## 检查与后续提交
 

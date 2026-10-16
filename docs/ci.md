@@ -22,9 +22,33 @@ Android 包名标明 ABI 与 debug / release-unsigned；选择旧 ARMv7 盒子�
 每个产物目录包含 manifest 与 SHA256SUMS；Android 额外包含 APK 的资源/DEX/ELF 依赖检查。
 
 Debug APK 使用临时 runner key，不同运行之间可能需要卸载重装。
-Unsigned release APK 需要自己的签名后安装。Apple 真机产物为未签名 `.app` 归档，
+Unsigned release APK 需要自己的签名后安装。main 的新增签名任务另外提供
+`atv-android-signed` artifact，包含五种 ABI 组合的正式签名 release APK。
+该任务等待隐私检查、三个宿主的共享核心检查和 Android 构建全部通过；PR 不执行签名。
+Apple 真机产物为未签名 `.app` 归档，
 不是可直接安装的已签名 IPA；需要对应开发签名与设备配置。macOS 归档未做公证。
 应用归档使用 tar 保留执行权限和符号链接，并去掉构建用户的 uid/gid/用户名。
+
+## Android 固定发布签名
+
+正式签名身份保存在 GitHub `android-release` Environment，只允许 `main` 分支部署，
+不要求每次人工批准。环境 Secrets 为 `ATV_ANDROID_KEYSTORE_BASE64` 和
+`ATV_ANDROID_KEYSTORE_PASSWORD`。PKCS12 密钥库采用 RSA 3072 位、50 年证书，
+别名与公开证书 SHA-256 指纹固定在 `app/signing-certificate.json`。
+初始化时密钥在内存中生成，经 stdin 交给 GitHub CLI 加密上传；没有创建本地私钥文件。
+初始化工具不属于仓库或日常 CI，日常任务缺少 Secrets 会失败，绝不会生成替代密钥。
+
+只有独立签名步骤读取 Secrets，在临时 runner 的私有目录恢复密钥库，完成后清理，
+失败或取消时另有清理步骤。签名环境不缓存密钥、不上传私钥或密码、不输出工具私密诊断。
+GitHub Secrets 不能直接读回，删除或覆盖唯一的密钥后无法继续给旧安装签名升级。
+
+五个正式 APK 均检查 v1/v2/v3 签名、固定证书指纹、16 KiB ZIP 对齐，并重新运行
+资源/DEX/ELF 依赖检查。v1 为 Android 4.4 所需；SHA256SUMS 与 manifest 对应签名后文件。
+公开产物只有 APK、检查 JSON、manifest 和 SHA256SUMS。原有 Debug 与 unsigned artifact
+继续保留用于调试；临时 Debug 包切换到正式签名包需要卸载重装，应用本地数据随卸载清除。
+
+此步骤只接入固定签名和可安装构建产物；按 commit 递增版本、GitHub Release 发布以及
+客户端检查更新仍是 issue #1 的后续工作，当前 `versionCode` 尚未自动递增。
 
 Rust 固定 1.99.1。Android 使用 JDK 21、SDK 36、Build Tools 35.0.0，
 32 位 NDK 25.2.9519653/API 19，64 位 NDK 29.0.14206865/API 21。
