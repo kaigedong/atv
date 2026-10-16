@@ -73,8 +73,14 @@ private struct ContentView: View {
                     }
                 }
                 HStack {
-                    Button("上一台") { player.next(-1) }.keyboardShortcut(.upArrow, modifiers: [])
-                    Button("下一台") { player.next(1) }.keyboardShortcut(.downArrow, modifiers: [])
+                    Button("上一台") { player.next(-1) }
+                    #if !os(tvOS)
+                        .keyboardShortcut(.upArrow, modifiers: [])
+                    #endif
+                    Button("下一台") { player.next(1) }
+                    #if !os(tvOS)
+                        .keyboardShortcut(.downArrow, modifiers: [])
+                    #endif
                     Spacer()
                 }
             }.padding()
@@ -84,6 +90,12 @@ private struct ContentView: View {
         .onChange(of: phase) { next in if next == .active { player.resume() } else { player.pause() } }
         #if os(tvOS)
         .onExitCommand { fullscreen = false }
+        .onMoveCommand { direction in
+            if fullscreen {
+                if direction == .up { player.next(-1) }
+                if direction == .down { player.next(1) }
+            }
+        }
         #endif
     }
 }

@@ -21,22 +21,22 @@ for path in (root / "app/src").rglob("*"):
         continue
     assert path.suffix.lower() not in {".js", ".cjs", ".mjs", ".wasm", ".html", ".htm"}, path
     if path.suffix in {".java", ".kt"}:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         for marker in ["android.webkit", "androidx.webkit", "evaluateJavascript", "javax.script", "org.mozilla.javascript"]:
             assert marker not in text, f"{path}: browser/script reference {marker}"
-android_build = (root / "app/build.gradle").read_text()
+android_build = (root / "app/build.gradle").read_text(encoding="utf-8")
 for path in (root / "apple/Sources").rglob("*"):
     if not path.is_file():
         continue
     assert path.suffix.lower() not in {".js", ".cjs", ".mjs", ".wasm", ".html"}, path
     if path.suffix == ".swift":
         for marker in ["WKWebView", "import JavaScriptCore", "import WebKit", "evaluateJavaScript"]:
-            assert marker not in path.read_text(), f"{path}: prohibited runtime {marker}"
+            assert marker not in path.read_text(encoding="utf-8"), f"{path}: prohibited runtime {marker}"
 for marker in ["androidx.webkit", "syncWebAssets", "generated/webAssets", "npm", "esbuild"]:
     assert marker not in android_build, f"default Android build still uses {marker}"
 edges = {}
 for name in sorted(shared | adapters):
-    manifest = tomllib.loads((crates / name / "Cargo.toml").read_text())
+    manifest = tomllib.loads((crates / name / "Cargo.toml").read_text(encoding="utf-8"))
     sections = [manifest.get("dependencies", {})]
     sections += [target.get("dependencies", {}) for target in manifest.get("target", {}).values()]
     dependencies = set().union(*(set(section) for section in sections))
@@ -44,14 +44,14 @@ for name in sorted(shared | adapters):
     if name in shared:
         assert not dependencies & (adapters | {"jni", "sdl2", "gstreamer", "gstreamer-app"}), name
         for file in (crates / name / "src").rglob("*.rs"):
-            text = file.read_text()
+            text = file.read_text(encoding="utf-8")
             for symbol in ["ANativeWindow", "AMediaCodec", "AAudioStream", "JNIEnv", "jni::", "gstreamer::", "sdl2::"]:
                 assert symbol not in text, f"{file}: platform symbol {symbol} in shared code"
 assert not set(edges["atv-android"]) & adapters
 assert not set(edges["atv-desktop"]) & adapters
 assert not set(edges["atv-apple"]) & adapters
-assert json.loads((crates / "atv-core/assets/channels.json").read_text()) == json.loads(
-    (root / "app/src/main/assets/channels.json").read_text())
+assert json.loads((crates / "atv-core/assets/channels.json").read_text(encoding="utf-8")) == json.loads(
+    (root / "app/src/main/assets/channels.json").read_text(encoding="utf-8"))
 
 environment = rust_environment()
 cargo = shutil.which("cargo", path=environment.get("PATH"))
