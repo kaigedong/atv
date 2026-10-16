@@ -11,7 +11,7 @@
 
 | 组件 | 当前源码 | 证据及边界 |
 | --- | --- | --- |
-| 频道目录 | `atv-core/directory.rs` | 解析官方 protobuf 与观看权限标志；内置目录只保留 60 个非 VIP 频道 |
+| 频道目录 | `atv-core/directory.rs` | 解析官方 protobuf 与观看权限标志；内置目录保留 60 个非 VIP 频道和 3 个限免频道 |
 | 正常鉴权与签名 | `atv-auth` | 84 个官方算法差分输出；CCTV1、CCTV2、CCTV13、北京卫视真实解析成功；保留服务端拒绝与试看信息 |
 | 签名／票据 WASM | `atv-auth` | 可读 Rust MD5 / AES / 票据生成，无 WASM 执行器；详见 `rust-auth.md` |
 | CMG 媒体 WASM | `atv-cmg` | Live mode 1/2 稀疏 TEA / EPB 处理；154 组合成原组件差分、627 个实际 mode 1 NAL 差分；两段合计 250 帧 FFmpeg 无解码错误 |

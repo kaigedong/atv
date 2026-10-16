@@ -270,6 +270,36 @@
     "payType": "879"
   },
   {
+    "pid": "600099658",
+    "streamId": "2025637103",
+    "channelName": "CCTV风云剧场频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": true,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099655",
+    "streamId": "2026874203",
+    "channelName": "CCTV第一剧场频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": true,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099620",
+    "streamId": "2026874303",
+    "channelName": "CCTV怀旧剧场频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": true,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
     "pid": "600002309",
     "streamId": "2024052703",
     "channelName": "北京卫视",
