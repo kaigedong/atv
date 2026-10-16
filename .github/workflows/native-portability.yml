@@ -1,0 +1,178 @@
+name: Native builds
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  RUSTUP_TOOLCHAIN: "1.99.1"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publication-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: python scripts/check-publication.py --history
+      - run: python -m unittest discover -s scripts/tests -v
+      - run: python scripts/ci-audit-tool.py gitleaks
+      - run: python scripts/ci-audit-tool.py actionlint
+
+  shared-core:
+    needs: publication-audit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: core-${{ runner.os }}-${{ runner.arch }}-rust-1.99.1-${{ hashFiles('native/Cargo.lock') }}
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
+      - run: cargo fmt --manifest-path native/Cargo.toml --all -- --check
+      - name: Portable tests
+        run: cargo test --locked --manifest-path native/Cargo.toml -p atv-core -p atv-auth -p atv-cmg -p atv-media -p atv-player -p atv-apple
+      - name: Portable Clippy
+        run: cargo clippy --locked --manifest-path native/Cargo.toml -p atv-core -p atv-auth -p atv-cmg -p atv-media -p atv-player -p atv-apple --all-targets -- -D warnings
+      - run: python scripts/check-native-architecture.py
+      - name: Link and execute the real C ABI consumer
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --locked --manifest-path native/Cargo.toml -p atv-apple --release
+          cc -Wall -Wextra -Werror -I apple/Bridge native/tests/apple-abi.c native/target/release/libatv_apple.a -ldl -lpthread -lm -o "$RUNNER_TEMP/atv-apple-abi"
+          mkdir -p "$RUNNER_TEMP/atv-apple-storage"
+          "$RUNNER_TEMP/atv-apple-abi" "$RUNNER_TEMP/atv-apple-storage"
+
+  android-native-build:
+    needs: publication-audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: android-rust-1.99.1-${{ hashFiles('native/Cargo.lock') }}
+      - run: rustup toolchain install 1.99.1 --profile minimal --target aarch64-linux-android,x86_64-linux-android,armv7-linux-androideabi,i686-linux-android
+      - name: Install pinned Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "ndk;29.0.14206865" "ndk;25.2.9519653"
+      - name: Compile and inspect universal and single-ABI APKs
+        run: python scripts/ci-build-android.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: atv-android
+          path: ci-dist/android/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  linux-desktop-build:
+    needs: publication-audit
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            architecture: x86_64
+          - os: ubuntu-24.04-arm
+            architecture: aarch64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: linux-${{ runner.arch }}-rust-1.99.1-${{ hashFiles('native/Cargo.lock') }}
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+      - run: cargo build --release --locked --manifest-path native/Cargo.toml -p atv-desktop
+      - run: python scripts/ci-package-native.py --platform linux --architecture ${{ matrix.architecture }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: atv-linux-${{ matrix.architecture }}
+          path: ci-dist/linux-${{ matrix.architecture }}/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  apple-native-build:
+    needs: publication-audit
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos, ios-simulator, tvos-simulator, ios, tvos]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: apple-${{ matrix.platform }}-${{ runner.arch }}-rust-1.99.1-${{ hashFiles('native/Cargo.lock') }}
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: brew install xcodegen
+      - name: Build Rust and Swift native app without signing credentials
+        run: python scripts/apple-build.py --platform ${{ matrix.platform }}
+      - run: python scripts/ci-package-native.py --platform ${{ matrix.platform }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: atv-apple-${{ matrix.platform }}
+          path: ci-dist/${{ matrix.platform }}/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

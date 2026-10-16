@@ -1,0 +1,94 @@
+plugins { id 'com.android.application' }
+
+def selectedAbis = providers.gradleProperty('atvAbis')
+    .orElse(providers.environmentVariable('ATV_ANDROID_ABIS'))
+    .orElse('armeabi-v7a,arm64-v8a,x86,x86_64').get()
+def abiList = selectedAbis.split(',').toList()
+if (!abiList || abiList.toSet().size() != abiList.size() || !abiList.every { it in ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'] }) {
+    throw new GradleException('atvAbis must contain distinct supported Android ABIs')
+}
+def pythonCommand = providers.environmentVariable('ATV_PYTHON')
+    .orElse(System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3').get()
+def rustJniDirectory = layout.buildDirectory.dir('generated/rustJniLibs')
+
+android {
+    namespace 'cn.bobo.atv.nativeplayer'
+    compileSdk 36
+    buildToolsVersion '35.0.0'
+    ndkVersion '29.0.14206865'
+    defaultConfig {
+        applicationId 'cn.bobo.atv.nativeplayer'
+        minSdk 19
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0-native'
+        testInstrumentationRunner 'cn.bobo.atv.nativeplayer.NativeRuntimeInstrumentation'
+        ndk {
+            abiFilters.addAll(abiList)
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildFeatures { buildConfig true }
+    packaging { jniLibs { useLegacyPackaging true } }
+    sourceSets { main.jniLibs.setSrcDirs([rustJniDirectory]) }
+}
+
+// Gradle/Android Studio and the CLI compile exactly the same Rust source.
+def buildRust = tasks.register('buildRust', Exec) {
+    group = 'build'
+    description = 'Compile the Rust player and Android native output adapter'
+    workingDir rootProject.projectDir
+    inputs.files(rootProject.fileTree('native') {
+        include '**/*.rs', '**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '**/assets/*'
+        exclude 'target/**'
+    })
+    inputs.file(rootProject.file('scripts/build-rust-android.py'))
+    inputs.file(rootProject.file('scripts/toolchain.py'))
+    inputs.property('abis', selectedAbis)
+    inputs.property('rustFlags', System.getenv('RUSTFLAGS') ?: '')
+    inputs.property('toolchain', System.getenv('RUSTUP_TOOLCHAIN') ?: System.getenv('ATV_RUST_TOOLCHAIN') ?: '1.99.1')
+    inputs.property('ndk', android.ndkVersion)
+    outputs.dir(rustJniDirectory)
+    doFirst {
+        commandLine pythonCommand, rootProject.file('scripts/build-rust-android.py'),
+            '--sdk', android.sdkDirectory.absolutePath, '--abis', selectedAbis,
+            '--output', rustJniDirectory.get().asFile.absolutePath
+    }
+}
+tasks.named('preBuild').configure { dependsOn(buildRust) }
+
+['Debug', 'Release'].each { variant ->
+    def directory = variant.toLowerCase()
+    def apkName = variant == 'Debug' ? 'app-debug.apk' : 'app-release-unsigned.apk'
+    def apkFile = layout.buildDirectory.file("outputs/apk/${directory}/${apkName}")
+    def reportFile = layout.buildDirectory.file("reports/native/${directory}.json")
+    def verify = tasks.register("verifyNative${variant}Apk", Exec) {
+        group = 'verification'
+        dependsOn("package${variant}")
+        inputs.file(apkFile)
+        inputs.file(rootProject.file('scripts/verify-native-apk.py'))
+        inputs.property('abis', selectedAbis)
+        outputs.file(reportFile)
+        workingDir rootProject.projectDir
+        commandLine pythonCommand, rootProject.file('scripts/verify-native-apk.py'),
+            apkFile.get().asFile.absolutePath, '--abis', selectedAbis,
+            '--output', reportFile.get().asFile.absolutePath
+    }
+    tasks.configureEach { if (name == "assemble${variant}") { dependsOn(verify) } }
+}
+
+// Optional component probe is packaged solely in androidTest, never the app.
+if (providers.gradleProperty('atvOutputProbe').orElse('false').get().toBoolean()) {
+    def probeDirectory = layout.buildDirectory.dir('generated/testRustJniLibs')
+    android.sourceSets.androidTest.jniLibs.srcDir(probeDirectory)
+    def probe = tasks.register('buildOutputProbe', Exec) {
+        workingDir rootProject.projectDir
+        commandLine pythonCommand, rootProject.file('scripts/build-rust-android.py'),
+            '--sdk', android.sdkDirectory.absolutePath, '--abis', selectedAbis,
+            '--package', 'atv-output-probe', '--output', probeDirectory.get().asFile.absolutePath
+    }
+    tasks.configureEach { if (name == 'preDebugAndroidTestBuild') { dependsOn(probe) } }
+}

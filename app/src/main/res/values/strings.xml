@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ATV 原生开发版</string>
+    <string name="channels">频道</string>
+    <string name="cctv">央视</string>
+    <string name="satellite">卫视</string>
+    <string name="fullscreen">全屏</string>
+    <string name="retry">重新连接</string>
+    <string name="loading">正在连接直播…</string>
+    <string name="playing">直播中</string>
+    <string name="paused">已暂停</string>
+    <string name="native_unavailable">原生播放组件尚未准备好，当前无法播放直播。</string>
+    <string name="native_failure">原生播放组件运行失败，请重新连接。</string>
+    <string name="no_surface">正在准备播放画面…</string>
+    <string name="directory_failure">频道目录无法读取，请重新安装应用。</string>
+    <string name="remote_hint">方向键选择频道 · 确认播放 · 全屏时上下切台、返回退出全屏</string>
+    <string name="exit_fullscreen">退出全屏</string>
+</resources>

@@ -1,0 +1,15 @@
+[package]
+name = "atv-apple"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Thread-owned C ABI for native Apple platform media adapters"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+atv-player = { path = "../atv-player" }
+atv-auth = { path = "../atv-auth" }
+atv-core = { path = "../atv-core" }
+serde_json.workspace = true

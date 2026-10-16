@@ -1,0 +1,18 @@
+[package]
+name = "atv-player"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Platform-independent live playback engine"
+
+[dependencies]
+atv-core = { path = "../atv-core" }
+atv-auth = { path = "../atv-auth" }
+atv-cmg = { path = "../atv-cmg" }
+atv-media = { path = "../atv-media" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+url.workspace = true
+aes.workspace = true
+cbc.workspace = true

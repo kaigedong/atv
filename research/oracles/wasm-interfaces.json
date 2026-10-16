@@ -1,0 +1,3016 @@
+{
+  "scope": "selected pinned original core-WASM modules",
+  "runtimeExecutedByThisInventory": false,
+  "networkFetchedByThisInventory": false,
+  "allFunctionSemanticsProven": false,
+  "modules": [
+    {
+      "module": "cmg",
+      "artifactSha256": "dba01d8debba97420dd1a498059459bde7107a2aaf4bb003ae7e04cf39c1ed35",
+      "artifactBytes": 64644,
+      "reaEvidenceId": "ev_a9265bffaafd165171559dc3b07392dfd8d43df464c583003453203126a2a5c2",
+      "watSha256": "b63877544f31f75d1ad0fe306f7c8501870b1695d008ead1d4009b6ee4e424aa",
+      "typedInterfaceState": "complete",
+      "counts": {
+        "import": 58,
+        "export": 38
+      },
+      "glueSha256": "c719aa90eba78a0bc9d7be29ccffce6a851c3f968770cacc883173230577f62a",
+      "aliasEvidence": "literal wrapper forwarding only; not a function-semantics proof",
+      "entries": [
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "e",
+          "kind": "func",
+          "index": 0,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"e\" (func (;0;) (type 12)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "f",
+          "kind": "func",
+          "index": 1,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"f\" (func (;1;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "g",
+          "kind": "func",
+          "index": 2,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"g\" (func (;2;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "h",
+          "kind": "func",
+          "index": 3,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"h\" (func (;3;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "i",
+          "kind": "func",
+          "index": 4,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "f64"
+            ]
+          },
+          "wat_form": "(import \"env\" \"i\" (func (;4;) (type 17)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "j",
+          "kind": "func",
+          "index": 5,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"j\" (func (;5;) (type 9)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "k",
+          "kind": "func",
+          "index": 6,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"k\" (func (;6;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "l",
+          "kind": "func",
+          "index": 7,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"l\" (func (;7;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "m",
+          "kind": "func",
+          "index": 8,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"m\" (func (;8;) (type 14)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "n",
+          "kind": "func",
+          "index": 9,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"n\" (func (;9;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "o",
+          "kind": "func",
+          "index": 10,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"o\" (func (;10;) (type 5)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "p",
+          "kind": "func",
+          "index": 11,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"p\" (func (;11;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "q",
+          "kind": "func",
+          "index": 12,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"q\" (func (;12;) (type 9)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "r",
+          "kind": "func",
+          "index": 13,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"r\" (func (;13;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "s",
+          "kind": "func",
+          "index": 14,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"s\" (func (;14;) (type 5)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "t",
+          "kind": "func",
+          "index": 15,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"t\" (func (;15;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "u",
+          "kind": "func",
+          "index": 16,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"u\" (func (;16;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "v",
+          "kind": "func",
+          "index": 17,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"v\" (func (;17;) (type 12)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "w",
+          "kind": "func",
+          "index": 18,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"w\" (func (;18;) (type 12)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "x",
+          "kind": "func",
+          "index": 19,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"x\" (func (;19;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "y",
+          "kind": "func",
+          "index": 20,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "f64",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"y\" (func (;20;) (type 13)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "z",
+          "kind": "func",
+          "index": 21,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"z\" (func (;21;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "A",
+          "kind": "func",
+          "index": 22,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"A\" (func (;22;) (type 9)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "B",
+          "kind": "func",
+          "index": 23,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"B\" (func (;23;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "C",
+          "kind": "func",
+          "index": 24,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"C\" (func (;24;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "D",
+          "kind": "func",
+          "index": 25,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"D\" (func (;25;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "E",
+          "kind": "func",
+          "index": 26,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"E\" (func (;26;) (type 5)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "F",
+          "kind": "func",
+          "index": 27,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"F\" (func (;27;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "G",
+          "kind": "func",
+          "index": 28,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "f64"
+            ]
+          },
+          "wat_form": "(import \"env\" \"G\" (func (;28;) (type 16)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "H",
+          "kind": "func",
+          "index": 29,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"H\" (func (;29;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "I",
+          "kind": "func",
+          "index": 30,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"I\" (func (;30;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "J",
+          "kind": "func",
+          "index": 31,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"J\" (func (;31;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "K",
+          "kind": "func",
+          "index": 32,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"K\" (func (;32;) (type 11)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "L",
+          "kind": "func",
+          "index": 33,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"L\" (func (;33;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "M",
+          "kind": "func",
+          "index": 34,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"M\" (func (;34;) (type 11)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "N",
+          "kind": "func",
+          "index": 35,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"N\" (func (;35;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "O",
+          "kind": "func",
+          "index": 36,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"O\" (func (;36;) (type 11)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "P",
+          "kind": "func",
+          "index": 37,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"P\" (func (;37;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "Q",
+          "kind": "func",
+          "index": 38,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"Q\" (func (;38;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "R",
+          "kind": "func",
+          "index": 39,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"R\" (func (;39;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "S",
+          "kind": "func",
+          "index": 40,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"S\" (func (;40;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "T",
+          "kind": "func",
+          "index": 41,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"T\" (func (;41;) (type 8)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "U",
+          "kind": "func",
+          "index": 42,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"U\" (func (;42;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "V",
+          "kind": "func",
+          "index": 43,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"V\" (func (;43;) (type 12)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "W",
+          "kind": "func",
+          "index": 44,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"env\" \"W\" (func (;44;) (type 5)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "X",
+          "kind": "func",
+          "index": 45,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"X\" (func (;45;) (type 15)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "Y",
+          "kind": "func",
+          "index": 46,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"Y\" (func (;46;) (type 4)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "Z",
+          "kind": "func",
+          "index": 47,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"Z\" (func (;47;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "_",
+          "kind": "func",
+          "index": 48,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"_\" (func (;48;) (type 6)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "$",
+          "kind": "func",
+          "index": 49,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"$\" (func (;49;) (type 11)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "aa",
+          "kind": "func",
+          "index": 50,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"env\" \"aa\" (func (;50;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "__table_base",
+          "kind": "global",
+          "index": 0,
+          "signature": {
+            "kind": "global",
+            "value_type": "i32",
+            "mutable": false
+          },
+          "wat_form": "(import \"env\" \"__table_base\" (global (;0;) i32))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "a",
+          "kind": "global",
+          "index": 1,
+          "signature": {
+            "kind": "global",
+            "value_type": "i32",
+            "mutable": false
+          },
+          "wat_form": "(import \"env\" \"a\" (global (;1;) i32))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "b",
+          "kind": "global",
+          "index": 2,
+          "signature": {
+            "kind": "global",
+            "value_type": "i32",
+            "mutable": false
+          },
+          "wat_form": "(import \"env\" \"b\" (global (;2;) i32))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "c",
+          "kind": "global",
+          "index": 3,
+          "signature": {
+            "kind": "global",
+            "value_type": "i32",
+            "mutable": false
+          },
+          "wat_form": "(import \"env\" \"c\" (global (;3;) i32))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "d",
+          "kind": "global",
+          "index": 4,
+          "signature": {
+            "kind": "global",
+            "value_type": "i32",
+            "mutable": false
+          },
+          "wat_form": "(import \"env\" \"d\" (global (;4;) i32))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "memory",
+          "kind": "memory",
+          "index": 0,
+          "signature": {
+            "kind": "memory",
+            "page_size": "65536",
+            "address_type": "i32",
+            "minimum": "256",
+            "maximum": "1536",
+            "shared": false
+          },
+          "wat_form": "(import \"env\" \"memory\" (memory (;0;) 256 1536))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "env",
+          "name": "table",
+          "kind": "table",
+          "index": 0,
+          "signature": {
+            "kind": "table",
+            "element": "funcref",
+            "address_type": "i32",
+            "minimum": "560",
+            "maximum": null,
+            "shared": false
+          },
+          "wat_form": "(import \"env\" \"table\" (table (;0;) 560 funcref))",
+          "issue": null
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ba",
+          "kind": "func",
+          "index": 71,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ba\" (func 71))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_InitPlayer"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ca",
+          "kind": "func",
+          "index": 254,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ca\" (func 254))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_UnInitPlayer"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "da",
+          "kind": "func",
+          "index": 176,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"da\" (func 176))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_UpdatePlayer"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ea",
+          "kind": "func",
+          "index": 91,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ea\" (func 91))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive0"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "fa",
+          "kind": "func",
+          "index": 92,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"fa\" (func 92))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive1"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ga",
+          "kind": "func",
+          "index": 93,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ga\" (func 93))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive2"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ha",
+          "kind": "func",
+          "index": 94,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ha\" (func 94))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive3"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ia",
+          "kind": "func",
+          "index": 95,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ia\" (func 95))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive4"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ja",
+          "kind": "func",
+          "index": 96,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ja\" (func 96))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive5"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ka",
+          "kind": "func",
+          "index": 97,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ka\" (func 97))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive6"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "la",
+          "kind": "func",
+          "index": 98,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"la\" (func 98))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive7"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ma",
+          "kind": "func",
+          "index": 99,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ma\" (func 99))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecLive8"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "na",
+          "kind": "func",
+          "index": 73,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"na\" (func 73))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD0"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "oa",
+          "kind": "func",
+          "index": 74,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"oa\" (func 74))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD1"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "pa",
+          "kind": "func",
+          "index": 75,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"pa\" (func 75))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD2"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "qa",
+          "kind": "func",
+          "index": 76,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"qa\" (func 76))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD3"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ra",
+          "kind": "func",
+          "index": 77,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ra\" (func 77))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD4"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "sa",
+          "kind": "func",
+          "index": 78,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"sa\" (func 78))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD5"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ta",
+          "kind": "func",
+          "index": 104,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ta\" (func 104))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD6"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ua",
+          "kind": "func",
+          "index": 79,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ua\" (func 79))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD7"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "va",
+          "kind": "func",
+          "index": 105,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"va\" (func 105))",
+          "issue": null,
+          "jsAliases": [
+            "_CMG_jsdecVOD8"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "wa",
+          "kind": "func",
+          "index": 152,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"wa\" (func 152))",
+          "issue": null,
+          "jsAliases": [
+            "__ZSt18uncaught_exceptionv"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "xa",
+          "kind": "func",
+          "index": 148,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": []
+          },
+          "wat_form": "(export \"xa\" (func 148))",
+          "issue": null,
+          "jsAliases": [
+            "___embind_register_native_and_builtin_types"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "ya",
+          "kind": "func",
+          "index": 69,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"ya\" (func 69))",
+          "issue": null,
+          "jsAliases": [
+            "___errno_location"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "za",
+          "kind": "func",
+          "index": 222,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"za\" (func 222))",
+          "issue": null,
+          "jsAliases": [
+            "___getTypeName"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Aa",
+          "kind": "func",
+          "index": 64,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"Aa\" (func 64))",
+          "issue": null,
+          "jsAliases": [
+            "_free"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ba",
+          "kind": "func",
+          "index": 151,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"Ba\" (func 151))",
+          "issue": null,
+          "jsAliases": [
+            "_jsfree"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ca",
+          "kind": "func",
+          "index": 182,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"Ca\" (func 182))",
+          "issue": null,
+          "jsAliases": [
+            "_jsmalloc"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Da",
+          "kind": "func",
+          "index": 296,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"Da\" (func 296))",
+          "issue": null,
+          "jsAliases": [
+            "_main"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ea",
+          "kind": "func",
+          "index": 63,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"Ea\" (func 63))",
+          "issue": null,
+          "jsAliases": [
+            "_malloc"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Fa",
+          "kind": "func",
+          "index": 66,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"Fa\" (func 66))",
+          "issue": null,
+          "jsAliases": [
+            "_strlen"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ga",
+          "kind": "func",
+          "index": 127,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"Ga\" (func 127))",
+          "issue": null,
+          "jsAliases": [
+            "dynCall_v"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ha",
+          "kind": "func",
+          "index": 128,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"Ha\" (func 128))",
+          "issue": null,
+          "jsAliases": [
+            "dynCall_vi"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ia",
+          "kind": "func",
+          "index": 129,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"Ia\" (func 129))",
+          "issue": null,
+          "jsAliases": [
+            "dynCall_vii"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ja",
+          "kind": "func",
+          "index": 126,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"Ja\" (func 126))",
+          "issue": null,
+          "jsAliases": [
+            "emtStackRestore"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ka",
+          "kind": "func",
+          "index": 124,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"Ka\" (func 124))",
+          "issue": null,
+          "jsAliases": [
+            "emtStackSave"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "La",
+          "kind": "func",
+          "index": 140,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": []
+          },
+          "wat_form": "(export \"La\" (func 140))",
+          "issue": null,
+          "jsAliases": [
+            "globalCtors"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Ma",
+          "kind": "func",
+          "index": 146,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"Ma\" (func 146))",
+          "issue": null,
+          "jsAliases": [
+            "stackAlloc"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "openapi",
+      "artifactSha256": "d977605f3e99879658a332376c55b1dd9e4c89fdc8108623d6252f72a9efed5a",
+      "artifactBytes": 27669,
+      "reaEvidenceId": "ev_ec6bcd7ea870500a775e1a2768ad0c59296e240c1ba6331dc4e511bf729115f4",
+      "watSha256": "890972e0bb856c686f415d1f910d48fdf831499a91e6010c10d70ed148b2cdd2",
+      "typedInterfaceState": "complete",
+      "counts": {
+        "import": 3,
+        "export": 7
+      },
+      "glueSha256": "98f04aca885c50bbe0d78cadcc672c079fb79683515ce0c09e63e11cdefea8d3",
+      "aliasEvidence": "literal wrapper forwarding only; not a function-semantics proof",
+      "entries": [
+        {
+          "direction": "import",
+          "module": "wbg",
+          "name": "__wbg_get_9c1840f7ecd81363",
+          "kind": "func",
+          "index": 0,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"wbg\" \"__wbg_get_9c1840f7ecd81363\" (func (;0;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "wbg",
+          "name": "__wbindgen_string_get",
+          "kind": "func",
+          "index": 1,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"wbg\" \"__wbindgen_string_get\" (func (;1;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "wbg",
+          "name": "__wbindgen_object_drop_ref",
+          "kind": "func",
+          "index": 2,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(import \"wbg\" \"__wbindgen_object_drop_ref\" (func (;2;) (type 4)))",
+          "issue": null
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "memory",
+          "kind": "memory",
+          "index": 0,
+          "signature": {
+            "kind": "memory",
+            "page_size": "65536",
+            "address_type": "i32",
+            "minimum": "17",
+            "maximum": null,
+            "shared": false
+          },
+          "wat_form": "(export \"memory\" (memory 0))",
+          "issue": null,
+          "jsAliases": []
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "get_token_rnd",
+          "kind": "func",
+          "index": 6,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"get_token_rnd\" (func 6))",
+          "issue": null,
+          "jsAliases": []
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "get_signature",
+          "kind": "func",
+          "index": 4,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"get_signature\" (func 4))",
+          "issue": null,
+          "jsAliases": []
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "__wbindgen_malloc",
+          "kind": "func",
+          "index": 44,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"__wbindgen_malloc\" (func 44))",
+          "issue": null,
+          "jsAliases": []
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "__wbindgen_realloc",
+          "kind": "func",
+          "index": 46,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"__wbindgen_realloc\" (func 46))",
+          "issue": null,
+          "jsAliases": []
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "__wbindgen_free",
+          "kind": "func",
+          "index": 54,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"__wbindgen_free\" (func 54))",
+          "issue": null,
+          "jsAliases": []
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "__wbindgen_add_to_stack_pointer",
+          "kind": "func",
+          "index": 66,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"__wbindgen_add_to_stack_pointer\" (func 66))",
+          "issue": null,
+          "jsAliases": []
+        }
+      ]
+    },
+    {
+      "module": "ticket",
+      "artifactSha256": "87c07fafe19e59ceb39a216913a00da5d10b14aa20177beb9d60562efff0cd34",
+      "artifactBytes": 949810,
+      "reaEvidenceId": "ev_c9cbb1460067df7263fc1d5b811c47de8d9d5e91b0b7ccc89f79fb9c02e2b795",
+      "watSha256": "a0c9958523091242caf41c2c7f05e4aedb9a5bef26ee0c7321c08a2eac930672",
+      "typedInterfaceState": "complete",
+      "counts": {
+        "import": 41,
+        "export": 8
+      },
+      "glueSha256": "68c055e9acaaa82203355cf5593f0af8abcf66c7825005b55cca5b5e0be21888",
+      "aliasEvidence": "literal wrapper forwarding only; not a function-semantics proof",
+      "entries": [
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "c",
+          "kind": "func",
+          "index": 0,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"c\" (func (;0;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "d",
+          "kind": "func",
+          "index": 1,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"d\" (func (;1;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "e",
+          "kind": "func",
+          "index": 2,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"e\" (func (;2;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "f",
+          "kind": "func",
+          "index": 3,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"f\" (func (;3;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "g",
+          "kind": "func",
+          "index": 4,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"g\" (func (;4;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "h",
+          "kind": "func",
+          "index": 5,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"h\" (func (;5;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "i",
+          "kind": "func",
+          "index": 6,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"i\" (func (;6;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "j",
+          "kind": "func",
+          "index": 7,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"j\" (func (;7;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "k",
+          "kind": "func",
+          "index": 8,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"k\" (func (;8;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "l",
+          "kind": "func",
+          "index": 9,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"l\" (func (;9;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "m",
+          "kind": "func",
+          "index": 10,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"m\" (func (;10;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "n",
+          "kind": "func",
+          "index": 11,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"n\" (func (;11;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "o",
+          "kind": "func",
+          "index": 12,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"o\" (func (;12;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "p",
+          "kind": "func",
+          "index": 13,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"p\" (func (;13;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "q",
+          "kind": "func",
+          "index": 14,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"q\" (func (;14;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "r",
+          "kind": "func",
+          "index": 15,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"r\" (func (;15;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "s",
+          "kind": "func",
+          "index": 16,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"s\" (func (;16;) (type 4)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "t",
+          "kind": "func",
+          "index": 17,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"t\" (func (;17;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "u",
+          "kind": "func",
+          "index": 18,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"u\" (func (;18;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "v",
+          "kind": "func",
+          "index": 19,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"v\" (func (;19;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "w",
+          "kind": "func",
+          "index": 20,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"w\" (func (;20;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "x",
+          "kind": "func",
+          "index": 21,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"x\" (func (;21;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "y",
+          "kind": "func",
+          "index": 22,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"y\" (func (;22;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "z",
+          "kind": "func",
+          "index": 23,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"z\" (func (;23;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "A",
+          "kind": "func",
+          "index": 24,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"A\" (func (;24;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "B",
+          "kind": "func",
+          "index": 25,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"B\" (func (;25;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "C",
+          "kind": "func",
+          "index": 26,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"C\" (func (;26;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "D",
+          "kind": "func",
+          "index": 27,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"D\" (func (;27;) (type 1)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "E",
+          "kind": "func",
+          "index": 28,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"E\" (func (;28;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "F",
+          "kind": "func",
+          "index": 29,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"F\" (func (;29;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "G",
+          "kind": "func",
+          "index": 30,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": []
+          },
+          "wat_form": "(import \"a\" \"G\" (func (;30;) (type 7)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "H",
+          "kind": "func",
+          "index": 31,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"H\" (func (;31;) (type 0)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "I",
+          "kind": "func",
+          "index": 32,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"I\" (func (;32;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "J",
+          "kind": "func",
+          "index": 33,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"J\" (func (;33;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "K",
+          "kind": "func",
+          "index": 34,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"K\" (func (;34;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "L",
+          "kind": "func",
+          "index": 35,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"L\" (func (;35;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "M",
+          "kind": "func",
+          "index": 36,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"M\" (func (;36;) (type 3)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "N",
+          "kind": "func",
+          "index": 37,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"N\" (func (;37;) (type 2)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "O",
+          "kind": "func",
+          "index": 38,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(import \"a\" \"O\" (func (;38;) (type 10)))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "a",
+          "kind": "memory",
+          "index": 0,
+          "signature": {
+            "kind": "memory",
+            "page_size": "65536",
+            "address_type": "i32",
+            "minimum": "256",
+            "maximum": "256",
+            "shared": false
+          },
+          "wat_form": "(import \"a\" \"a\" (memory (;0;) 256 256))",
+          "issue": null
+        },
+        {
+          "direction": "import",
+          "module": "a",
+          "name": "b",
+          "kind": "table",
+          "index": 0,
+          "signature": {
+            "kind": "table",
+            "element": "funcref",
+            "address_type": "i32",
+            "minimum": "743",
+            "maximum": null,
+            "shared": false
+          },
+          "wat_form": "(import \"a\" \"b\" (table (;0;) 743 funcref))",
+          "issue": null
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "P",
+          "kind": "func",
+          "index": 1872,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": []
+          },
+          "wat_form": "(export \"P\" (func 1872))",
+          "issue": null,
+          "jsAliases": [
+            "___wasm_call_ctors"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "Q",
+          "kind": "func",
+          "index": 1871,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"Q\" (func 1871))",
+          "issue": null,
+          "jsAliases": [
+            "___em_js__is_browser_environment"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "R",
+          "kind": "func",
+          "index": 116,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"R\" (func 116))",
+          "issue": null,
+          "jsAliases": [
+            "_malloc"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "S",
+          "kind": "func",
+          "index": 1286,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"S\" (func 1286))",
+          "issue": null,
+          "jsAliases": [
+            "_get_encrypt_str_len"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "T",
+          "kind": "func",
+          "index": 1218,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"T\" (func 1218))",
+          "issue": null,
+          "jsAliases": [
+            "_aes_encrypt_ctr"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "U",
+          "kind": "func",
+          "index": 1158,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32",
+              "i32",
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"U\" (func 1158))",
+          "issue": null,
+          "jsAliases": [
+            "_aes_decrypt_ctr"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "V",
+          "kind": "func",
+          "index": 1419,
+          "signature": {
+            "kind": "func",
+            "params": [],
+            "results": [
+              "i32"
+            ]
+          },
+          "wat_form": "(export \"V\" (func 1419))",
+          "issue": null,
+          "jsAliases": [
+            "___errno_location"
+          ]
+        },
+        {
+          "direction": "export",
+          "module": null,
+          "name": "W",
+          "kind": "func",
+          "index": 169,
+          "signature": {
+            "kind": "func",
+            "params": [
+              "i32"
+            ],
+            "results": []
+          },
+          "wat_form": "(export \"W\" (func 169))",
+          "issue": null,
+          "jsAliases": [
+            "_free"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+[package]
+name = "atv-output-probe"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "atv_output_probe"
+crate-type = ["cdylib"]
+
+[target.'cfg(target_os = "android")'.dependencies]
+atv-android = { path = "../../crates/atv-android", features = ["output-only"] }
+atv-core = { path = "../../crates/atv-core" }
+atv-media = { path = "../../crates/atv-media" }
+jni = "0.21.1"
+serde_json.workspace = true
+
+[features]
+legacy-android = ["atv-android/legacy-android"]

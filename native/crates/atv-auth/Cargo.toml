@@ -1,0 +1,16 @@
+[package]
+name = "atv-auth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aes.workspace = true
+cbc.workspace = true
+ctr = "0.9.2"
+hex = "0.4.3"
+md-5 = "0.10.6"
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+rand = "0.9"
+url.workspace = true

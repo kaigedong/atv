@@ -1,0 +1,17 @@
+[package]
+name = "atv-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native desktop host for the shared Rust live player"
+
+[dependencies]
+atv-player = { path = "../atv-player" }
+atv-media = { path = "../atv-media" }
+atv-core = { path = "../atv-core" }
+atv-auth = { path = "../atv-auth" }
+serde_json.workspace = true
+sdl2 = "0.38"
+gstreamer = { version = "0.24", features = ["v1_20"] }
+gstreamer-app = { version = "0.24", features = ["v1_20"] }
+gstreamer-video = { version = "0.24", features = ["v1_20"] }

@@ -1,0 +1,732 @@
+[
+  {
+    "pid": "600001859",
+    "streamId": "2024078201",
+    "channelName": "CCTV1",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001800",
+    "streamId": "2024075401",
+    "channelName": "CCTV2",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001801",
+    "streamId": "2024068501",
+    "channelName": "CCTV3",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001814",
+    "streamId": "2029797101",
+    "channelName": "CCTV4",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001818",
+    "streamId": "2024078401",
+    "channelName": "CCTV5",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001817",
+    "streamId": "2024078001",
+    "channelName": "CCTV5+",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600108442",
+    "streamId": "2013693901",
+    "channelName": "CCTV6",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600004092",
+    "streamId": "2024072001",
+    "channelName": "CCTV7",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001803",
+    "streamId": "2029793001",
+    "channelName": "CCTV8",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600004078",
+    "streamId": "2024078601",
+    "channelName": "CCTV9",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001805",
+    "streamId": "2024078701",
+    "channelName": "CCTV10",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001806",
+    "streamId": "2027248701",
+    "channelName": "CCTV11",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001807",
+    "streamId": "2027248801",
+    "channelName": "CCTV12",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001811",
+    "streamId": "2029797201",
+    "channelName": "CCTV13",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001809",
+    "streamId": "2027248901",
+    "channelName": "CCTV14",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600001815",
+    "streamId": "2027249001",
+    "channelName": "CCTV15",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600098637",
+    "streamId": "2027249101",
+    "channelName": "CCTV16-HD",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600099502",
+    "streamId": "2027249301",
+    "channelName": "CCTV16(4K）",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": true,
+    "payType": "879"
+  },
+  {
+    "pid": "600001810",
+    "streamId": "2027249401",
+    "channelName": "CCTV17",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002264",
+    "streamId": "2029810301",
+    "channelName": "CCTV4K",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": true,
+    "payType": "879"
+  },
+  {
+    "pid": "600156816",
+    "streamId": "2026774101",
+    "channelName": "CCTV8K",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600014550",
+    "streamId": "2024181701",
+    "channelName": "CGTN",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600084704",
+    "streamId": "2024181801",
+    "channelName": "CGTN法语频道",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600084758",
+    "streamId": "2024181901",
+    "channelName": "CGTN俄语频道",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600084782",
+    "streamId": "2024182001",
+    "channelName": "CGTN阿拉伯语频道",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600084744",
+    "streamId": "2024182101",
+    "channelName": "CGTN西班牙语频道",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600084781",
+    "streamId": "2024182301",
+    "channelName": "CGTN外语纪录频道",
+    "channelType": "yangshi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600099658",
+    "streamId": "2025637103",
+    "channelName": "CCTV风云剧场频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": true,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099655",
+    "streamId": "2026874203",
+    "channelName": "CCTV第一剧场频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": true,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099620",
+    "streamId": "2026874303",
+    "channelName": "CCTV怀旧剧场频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": true,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099637",
+    "streamId": "2026874403",
+    "channelName": "CCTV世界地理频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099660",
+    "streamId": "2026874503",
+    "channelName": "CCTV风云音乐频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099649",
+    "streamId": "2026874603",
+    "channelName": "CCTV兵器科技频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099636",
+    "streamId": "2026966203",
+    "channelName": "CCTV风云足球频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099659",
+    "streamId": "2026874703",
+    "channelName": "CCTV高尔夫·网球频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099650",
+    "streamId": "2026874803",
+    "channelName": "CCTV女性时尚频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099653",
+    "streamId": "2026874903",
+    "channelName": "CCTV央视文化精品频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099652",
+    "streamId": "2026875003",
+    "channelName": "CCTV央视台球频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099656",
+    "streamId": "2026875103",
+    "channelName": "CCTV电视指南频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600099651",
+    "streamId": "2025637003",
+    "channelName": "CCTV卫生健康频道",
+    "channelType": "yangshi",
+    "isVip": true,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "880"
+  },
+  {
+    "pid": "600002309",
+    "streamId": "2024052703",
+    "channelName": "北京卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002521",
+    "streamId": "2024171103",
+    "channelName": "江苏卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002483",
+    "streamId": "2024054503",
+    "channelName": "东方卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002520",
+    "streamId": "2024054703",
+    "channelName": "浙江卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002475",
+    "streamId": "2024054803",
+    "channelName": "湖南卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002508",
+    "streamId": "2024171203",
+    "channelName": "湖北卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002485",
+    "streamId": "2024060903",
+    "channelName": "广东卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002509",
+    "streamId": "2024060703",
+    "channelName": "广西卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002498",
+    "streamId": "2029797003",
+    "channelName": "黑龙江卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002506",
+    "streamId": "2024055603",
+    "channelName": "海南卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002531",
+    "streamId": "2024061103",
+    "channelName": "重庆卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002481",
+    "streamId": "2024061303",
+    "channelName": "深圳卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002516",
+    "streamId": "2024061403",
+    "channelName": "四川卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002525",
+    "streamId": "2029797303",
+    "channelName": "河南卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002484",
+    "streamId": "2024061503",
+    "channelName": "福建东南卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002490",
+    "streamId": "2024061603",
+    "channelName": "贵州卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002503",
+    "streamId": "2024061703",
+    "channelName": "江西卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002505",
+    "streamId": "2024171303",
+    "channelName": "辽宁卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002532",
+    "streamId": "2024171403",
+    "channelName": "安徽卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002493",
+    "streamId": "2024171503",
+    "channelName": "河北卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600002513",
+    "streamId": "2029787903",
+    "channelName": "山东卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600152137",
+    "streamId": "2019927003",
+    "channelName": "天津卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190405",
+    "streamId": "2025561503",
+    "channelName": "吉林卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190400",
+    "streamId": "2029795103",
+    "channelName": "陕西卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190408",
+    "streamId": "2025561703",
+    "channelName": "甘肃卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190737",
+    "streamId": "2025608503",
+    "channelName": "宁夏卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190401",
+    "streamId": "2025561203",
+    "channelName": "内蒙古卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190402",
+    "streamId": "2025561303",
+    "channelName": "云南卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190407",
+    "streamId": "2025560803",
+    "channelName": "山西卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190406",
+    "streamId": "2025559103",
+    "channelName": "青海卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600190403",
+    "streamId": "2025558003",
+    "channelName": "西藏卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600171827",
+    "streamId": "2022823801",
+    "channelName": "中国教育电视台1频道",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  },
+  {
+    "pid": "600152138",
+    "streamId": "2019927403",
+    "channelName": "新疆卫视",
+    "channelType": "weishi",
+    "isVip": false,
+    "isLimitedFree": false,
+    "is4K": false,
+    "payType": "879"
+  }
+]

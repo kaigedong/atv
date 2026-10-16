@@ -1,0 +1,12 @@
+title = "ATV publication scan"
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reviewed synthetic oracle outputs; check-publication.py pins the complete fixture digest"
+paths = ['''(^|/)native/crates/atv-auth/tests/oracle-fixtures\.json$''']
+
+[[allowlists]]
+description = "Fixed public browser application metadata, not an account credential"
+regexTarget = "secret"
+regexes = ['''^b42702bf7309a179d102f3d51b1add2fda0bc7ada64cb801$''']

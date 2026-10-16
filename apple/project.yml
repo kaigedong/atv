@@ -1,0 +1,59 @@
+name: ATV
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "13.0"
+    iOS: "16.0"
+    tvOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Bridge/ATV-Bridging-Header.h"
+    HEADER_SEARCH_PATHS: "$(SRCROOT)/Bridge"
+    LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build/libs/$(PLATFORM_NAME)"
+    OTHER_LDFLAGS: ["$(inherited)", "-latv_apple", "-liconv", "-lresolv", "-framework", "Security"]
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: ATV
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ATV-macOS:
+    type: application
+    platform: macOS
+    sources: [Sources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cn.bobo.atv.macos
+        ENABLE_HARDENED_RUNTIME: YES
+  ATV-iOS:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cn.bobo.atv.ios
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+  ATV-tvOS:
+    type: application
+    platform: tvOS
+    sources: [Sources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cn.bobo.atv.tvos
+        TARGETED_DEVICE_FAMILY: "3"
+schemes:
+  ATV-macOS:
+    build:
+      targets:
+        ATV-macOS: all
+  ATV-iOS:
+    build:
+      targets:
+        ATV-iOS: all
+  ATV-tvOS:
+    build:
+      targets:
+        ATV-tvOS: all

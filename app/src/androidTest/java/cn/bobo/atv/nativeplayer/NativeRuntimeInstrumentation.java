@@ -1,0 +1,594 @@
+package cn.bobo.atv.nativeplayer;
+
+import android.app.Activity;
+import android.app.Instrumentation;
+import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.graphics.Rect;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.SystemClock;
+import android.os.ParcelFileDescriptor;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+
+/** Real native playback acceptance runner; no test player, media mocks or production hooks. */
+public final class NativeRuntimeInstrumentation extends Instrumentation {
+    private static final String PACKAGE = "cn.bobo.atv.nativeplayer";
+    private static final String[][] CHANNELS = {
+            {"CCTV1", "600001859", "yangshi"},
+            {"CCTV2", "600001800", "yangshi"},
+            {"CCTV13", "600001811", "yangshi"},
+            {"北京卫视", "600002309", "weishi"}
+    };
+    private final JSONObject report = new JSONObject();
+    private final JSONArray steps = new JSONArray();
+    private final String runId = UUID.randomUUID().toString();
+    private Bundle arguments;
+    private MainActivity activity;
+    private long channelTimeoutMs;
+    private JSONObject currentStep;
+    private JSONArray snapshots;
+    private long lastSnapshot;
+
+    @Override public void onCreate(Bundle args) {
+        super.onCreate(args);
+        arguments = args == null ? new Bundle() : args;
+        start();
+    }
+
+    @Override public void onStart() {
+        boolean passed = false;
+        Throwable failure = null;
+        String mode = arguments.getString("mode", "smoke");
+        channelTimeoutMs = boundedArgument("channelTimeoutSeconds", 75, 10, 180) * 1000L;
+        try {
+            PackageInfo pkg = getTargetContext().getPackageManager().getPackageInfo(PACKAGE, 0);
+            report.put("schemaVersion", 1).put("runId", runId).put("mode", mode)
+                    .put("startedUnixMillis", System.currentTimeMillis())
+                    .put("versionName", pkg.versionName)
+                    .put("versionCode", Build.VERSION.SDK_INT >= 28 ? pkg.getLongVersionCode() : pkg.versionCode)
+                    .put("targetApkSha256", digestFile(getTargetContext().getApplicationInfo().sourceDir))
+                    .put("testApkSha256", digestFile(getContext().getApplicationInfo().sourceDir))
+                    .put("deviceModel", Build.MODEL).put("sdk", Build.VERSION.SDK_INT)
+                    .put("steps", steps)
+                    .put("audioEvidence", "Native audio output counters; audible output requires the separate capture comparison");
+            require(NativeBridge.available(), "native library unavailable");
+            launch();
+            switch (mode) {
+                case "smoke": smoke(); break;
+                case "all": smoke(); soak(); break;
+                case "soak": selectChannel(CHANNELS[2]); awaitProgress(CHANNELS[2][1], 3); soak(); break;
+                case "lifecycle": selectChannel(CHANNELS[0]); awaitProgress(CHANNELS[0][1], 3); lifecycle(); break;
+                case "retry": selectChannel(CHANNELS[0]); awaitProgress(CHANNELS[0][1], 3); retry(); break;
+                case "remote": navigationAndFullscreen(); break;
+                case "network": network(); break;
+                case "component": component(); break;
+                default: throw new CheckFailure("unknown instrumentation mode");
+            }
+            passed = true;
+        } catch (Throwable error) {
+            failure = error;
+            try {
+                report.put("failureClass", error.getClass().getName());
+                JSONArray frames = new JSONArray();
+                StackTraceElement[] trace = error.getStackTrace();
+                for (int i = 0; i < Math.min(trace.length, 12); i++) frames.put(new JSONObject()
+                        .put("class", trace[i].getClassName()).put("method", trace[i].getMethodName())
+                        .put("line", trace[i].getLineNumber()));
+                report.put("failureFrames", frames);
+                // Only our own fixed acceptance messages are suitable for the report.
+                if (error instanceof CheckFailure) report.put("failure", error.getMessage());
+                try { snapshot(true); } catch (Exception ignored) { }
+                if (currentStep != null) currentStep.put("passed", false);
+            } catch (Exception ignored) { }
+        } finally {
+            try { finishActivity(); }
+            catch (Throwable error) {
+                passed = false;
+                if (failure == null) failure = error;
+                try { report.put("cleanupFailureClass", error.getClass().getName()); }
+                catch (Exception ignored) { }
+            }
+            Bundle result = new Bundle();
+            try {
+                report.put("passed", passed).put("finishedUnixMillis", System.currentTimeMillis());
+                File external = getTargetContext().getExternalFilesDir(null);
+                File directory = external == null ? null : new File(external, "runtime-native");
+                if (directory == null || (!directory.isDirectory() && !directory.mkdirs()))
+                    directory = new File(getTargetContext().getFilesDir(), "runtime-native");
+                require(directory.isDirectory() || directory.mkdirs(), "cannot create runtime report directory");
+                File destination = new File(directory, runId + ".json");
+                try (FileOutputStream output = new FileOutputStream(destination)) {
+                    output.write(report.toString(2).getBytes(StandardCharsets.UTF_8));
+                }
+                result.putString("reportPath", destination.getAbsolutePath());
+            } catch (Throwable writeError) {
+                passed = false;
+                result.putString("reportFailureClass", writeError.getClass().getName());
+            }
+            result.putString("runId", runId);
+            result.putString("passed", Boolean.toString(passed));
+            if (failure != null) result.putString("failureClass", failure.getClass().getName());
+            finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, result);
+        }
+    }
+
+    private int boundedArgument(String key, int fallback, int minimum, int maximum) {
+        try { return Math.max(minimum, Math.min(maximum, Integer.parseInt(arguments.getString(key, "")))); }
+        catch (RuntimeException ignored) { return fallback; }
+    }
+
+    private void launch() throws Exception {
+        begin("launch");
+        Intent intent = new Intent(Intent.ACTION_MAIN).setClassName(PACKAGE, PACKAGE + ".MainActivity")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        activity = (MainActivity) startActivitySync(intent);
+        waitForIdleSync();
+        waitCondition(() -> session() != 0, 15000, "surface did not create a native session");
+        snapshot(true);
+        complete();
+    }
+
+    private void smoke() throws Exception {
+        // Two complete rounds exercise cancellation and ordinary switching in both groups.
+        for (int round = 0; round < 2; round++) {
+            for (String[] channel : CHANNELS) {
+                begin("switch-" + round + "-" + channel[0]);
+                selectChannel(channel);
+                awaitProgress(channel[1], 3);
+                complete();
+            }
+        }
+        navigationAndFullscreen();
+        retry();
+        lifecycle();
+    }
+
+    private void navigationAndFullscreen() throws Exception {
+        begin("remote-navigation-and-fullscreen");
+        selectChannel(CHANNELS[0]);
+        awaitProgress(CHANNELS[0][1], 2);
+        main(() -> recordFocus("channelFocusBeforeRemotePreparation",
+                channelRows().findViewWithTag(CHANNELS[0][1])));
+        waitCondition(this::windowFocused, 5000, "remote input target window has no focus");
+        // Programmatic clicks can leave a phone emulator in touch mode. A real
+        // directional key exits touch mode just as a TV remote does; do not
+        // change production focusability or use a privileged touch-mode setter.
+        currentStep.put("remotePreparation", "real KEYCODE_DPAD_UP");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+        waitForIdleSync();
+        main(() -> {
+            View row = channelRows().findViewWithTag(CHANNELS[0][1]);
+            recordFocus("channelFocusAfterRemotePreparation", row);
+            boolean focused = row != null && row.requestFocus();
+            recordFocus("channelFocusAfterRequest", row);
+            require(focused && row.hasFocus(), "cannot focus CCTV1 channel row");
+        });
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+        waitForIdleSync();
+        AtomicReference<Object> focusTag = new AtomicReference<>();
+        main(() -> focusTag.set(activity.getCurrentFocus() == null ? null : activity.getCurrentFocus().getTag()));
+        require(CHANNELS[1][1].equals(focusTag.get()), "DPAD_DOWN did not focus CCTV2");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        awaitProgress(CHANNELS[1][1], 3);
+        main(() -> {
+            Button full = findButton(activity.getWindow().getDecorView(), resourceString("fullscreen"));
+            recordFocus("fullscreenFocusBeforeRequest", full);
+            boolean focused = full != null && full.requestFocus();
+            recordFocus("fullscreenFocusAfterRequest", full);
+            require(focused && full.hasFocus(), "cannot focus fullscreen button");
+        });
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        waitCondition(() -> boolField("fullscreen"), 3000, "DPAD_CENTER did not enter fullscreen");
+        require(viewField("sidebar").getVisibility() == View.GONE, "fullscreen sidebar remains visible");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+        awaitProgress(CHANNELS[0][1], 2);
+        require(boolField("fullscreen") && viewField("sidebar").getVisibility() == View.GONE,
+                "fullscreen DPAD_UP did not preserve fullscreen");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+        awaitProgress(CHANNELS[1][1], 2);
+        require(boolField("fullscreen") && viewField("sidebar").getVisibility() == View.GONE,
+                "fullscreen DPAD_DOWN did not preserve fullscreen");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> !boolField("fullscreen"), 3000, "BACK did not exit fullscreen");
+        require(!activity.isFinishing(), "BACK unexpectedly finished fullscreen activity");
+        awaitProgress(CHANNELS[1][1], 2);
+        currentStep.put("remoteKeys", new JSONArray().put("DPAD_UP").put("DPAD_DOWN").put("DPAD_CENTER").put("DPAD_CENTER")
+                .put("DPAD_UP").put("DPAD_DOWN").put("BACK"));
+        complete();
+    }
+
+    private boolean windowFocused() throws Exception {
+        AtomicReference<Boolean> focused = new AtomicReference<>(false);
+        main(() -> focused.set(activity.hasWindowFocus()));
+        return focused.get();
+    }
+
+    /** UI-only diagnostics distinguish an input harness problem from product focus handling. */
+    private void recordFocus(String key, View row) throws Exception {
+        JSONObject value = new JSONObject().put("exists", row != null)
+                .put("activityWindowFocus", activity.hasWindowFocus());
+        if (row != null) {
+            Rect visible = new Rect();
+            boolean globallyVisible = row.getGlobalVisibleRect(visible);
+            value.put("inTouchMode", row.isInTouchMode()).put("focusable", row.isFocusable())
+                    .put("focusableInTouchMode", row.isFocusableInTouchMode()).put("shown", row.isShown())
+                    .put("windowFocus", row.hasWindowFocus()).put("hasFocus", row.hasFocus())
+                    .put("attached", row.isAttachedToWindow()).put("visibility", row.getVisibility())
+                    .put("windowVisibility", row.getWindowVisibility()).put("globallyVisible", globallyVisible)
+                    .put("visibleWidth", visible.width()).put("visibleHeight", visible.height());
+        }
+        currentStep.put(key, value);
+    }
+
+    private void retry() throws Exception {
+        begin("real-server-failure-and-ui-retry");
+        selectChannel(CHANNELS[0]);
+        awaitProgress(CHANNELS[0][1], 2);
+        long handle = session();
+        // A normally formatted but nonexistent channel exercises the actual resolver
+        // and service rejection. Keep the genuine selected UI channel and device GUID.
+        NativeBridge.select(handle, "999999999999", "999999999999");
+        waitCondition(() -> "error".equals(status().optString("state")), channelTimeoutMs,
+                "nonexistent channel did not produce a real error");
+        snapshot(true);
+        currentStep.put("failureCode", status().optString("errorCode"));
+        waitCondition(() -> viewField("retry").getVisibility() == View.VISIBLE, 3000,
+                "failure did not expose retry button");
+        main(() -> require(viewField("retry").performClick(), "retry button did not accept click"));
+        awaitProgress(CHANNELS[0][1], 3);
+        complete();
+    }
+
+    /** Explicit opt-in disruption test; never included in smoke/all modes. */
+    private void network() throws Exception {
+        begin("real-network-loss-and-retry");
+        String fingerprint = Build.FINGERPRINT == null ? "" : Build.FINGERPRINT.toLowerCase(java.util.Locale.ROOT);
+        String model = Build.MODEL == null ? "" : Build.MODEL.toLowerCase(java.util.Locale.ROOT);
+        boolean emulator = fingerprint.startsWith("generic") || fingerprint.contains("sdk_gphone")
+                || model.contains("emulator") || model.contains("android sdk") || model.contains("sdk_gphone");
+        boolean explicit = "true".equalsIgnoreCase(arguments.getString("allowNetworkChange", "false"));
+        require(emulator || explicit, "network disruption requires an emulator or allowNetworkChange=true");
+        selectChannel(CHANNELS[0]);
+        awaitProgress(CHANNELS[0][1], 3);
+        String wifi = radioSetting("wifi_on"), data = radioSetting("mobile_data");
+        require(("0".equals(wifi) || "1".equals(wifi)) && ("0".equals(data) || "1".equals(data)),
+                "radio state cannot be safely restored");
+        currentStep.put("networkChangeExplicitlyAllowed", explicit).put("emulatorDetected", emulator)
+                .put("initialWifiEnabled", "1".equals(wifi)).put("initialMobileDataEnabled", "1".equals(data));
+        try {
+            shell("svc wifi disable");
+            shell("svc data disable");
+            waitCondition(() -> "0".equals(radioSetting("wifi_on")) && "0".equals(radioSetting("mobile_data")),
+                    10000, "radios did not disable");
+            waitCondition(() -> "error".equals(status().optString("state")), channelTimeoutMs,
+                    "real network outage did not produce a playback error");
+            JSONObject error = status();
+            String code = error.optString("errorCode");
+            require("network".equals(code) || "stalled".equals(code), "network outage produced an unrelated playback error");
+            currentStep.put("networkLossErrorCode", code);
+            snapshot(true);
+            waitCondition(() -> nativeThreads().optInt("network") == 0, 15000,
+                    "failed network worker did not exit");
+            currentStep.put("threadsAfterNetworkLoss", nativeThreads());
+        } finally {
+            // Both restore operations must be attempted even if the first fails.
+            try { shell("svc wifi " + ("1".equals(wifi) ? "enable" : "disable")); }
+            finally { shell("svc data " + ("1".equals(data) ? "enable" : "disable")); }
+            waitCondition(() -> wifi.equals(radioSetting("wifi_on")) && data.equals(radioSetting("mobile_data")),
+                    15000, "original radio states did not restore");
+            currentStep.put("originalRadioStatesRestored", true);
+        }
+        waitCondition(() -> viewField("retry").getVisibility() == View.VISIBLE, 3000,
+                "network failure did not expose retry button");
+        // Allow real DHCP and upstream connectivity to recover before one normal UI retry.
+        SystemClock.sleep(5000);
+        main(() -> require(viewField("retry").performClick(), "network retry click was not accepted"));
+        awaitProgress(CHANNELS[0][1], 3);
+        complete();
+    }
+
+    private String radioSetting(String key) throws Exception {
+        // Keys are internal fixed literals; no shell input is accepted from test arguments.
+        require("wifi_on".equals(key) || "mobile_data".equals(key), "unknown radio setting");
+        return shell("settings get global " + key).trim();
+    }
+
+    private String shell(String command) throws Exception {
+        ParcelFileDescriptor descriptor = getUiAutomation().executeShellCommand(command);
+        try (InputStream input = new ParcelFileDescriptor.AutoCloseInputStream(descriptor);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] bytes = new byte[256]; int length;
+            while ((length = input.read(bytes)) != -1) {
+                require(output.size() + length <= 4096, "radio command returned excessive output");
+                output.write(bytes, 0, length);
+            }
+            return output.toString(StandardCharsets.UTF_8.name());
+        }
+    }
+
+    private void lifecycle() throws Exception {
+        begin("background-pause-and-resume");
+        String pid = selectedPid();
+        long beforeBackground = session();
+        main(() -> activity.startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+        waitCondition(() -> !boolField("resumed"), 5000, "activity did not enter background");
+        SystemClock.sleep(1500);
+        long pausedHandle = session();
+        if (pausedHandle != 0) {
+            JSONObject before = status();
+            require("paused".equals(before.optString("state")), "background renderer did not report paused");
+            SystemClock.sleep(1500);
+            JSONObject after = status();
+            require(after.optLong("videoFrames") == before.optLong("videoFrames")
+                    && after.optLong("audioFrames") == before.optLong("audioFrames"),
+                    "background output counters continued advancing");
+            snapshot(true);
+            waitCondition(() -> nativeThreads().optInt("network") == 0, 15000,
+                    "paused native network worker remained live");
+            currentStep.put("backgroundNativeThreads", nativeThreads());
+        } else {
+            currentStep.put("backgroundSurfaceReleased", true);
+            awaitReleased(beforeBackground);
+        }
+        main(() -> activity.startActivity(new Intent(Intent.ACTION_MAIN).setClassName(PACKAGE, PACKAGE + ".MainActivity")
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP)));
+        waitCondition(() -> boolField("resumed") && session() != 0, 15000, "activity did not resume with a surface");
+        awaitProgress(pid, 3);
+        complete();
+
+        begin("surface-destroy-and-recreate");
+        long old = session();
+        main(() -> viewField("surface").setVisibility(View.GONE));
+        waitCondition(() -> session() == 0, 10000, "Surface destruction did not clear the Java handle");
+        awaitReleased(old);
+        main(() -> viewField("surface").setVisibility(View.VISIBLE));
+        waitCondition(() -> session() != 0 && session() != old, 15000, "Surface recreation did not create a new native handle");
+        awaitProgress(pid, 3);
+        complete();
+    }
+
+    private void soak() throws Exception {
+        begin("continuous-native-live");
+        int durationSeconds = boundedArgument("durationSeconds", 600, 10, 7200);
+        String pid = selectedPid();
+        JSONObject initial = awaitPlaying(pid);
+        long targetPosition = initial.optLong("positionMs") + durationSeconds * 1000L;
+        long initialVideo = initial.optLong("videoFrames"), initialAudio = initial.optLong("audioFrames");
+        long started = SystemClock.elapsedRealtime();
+        long deadline = started + durationSeconds * 1000L + 120000L;
+        long lastPosition = initial.optLong("positionMs"), lastAdvance = SystemClock.elapsedRealtime();
+        long video = initialVideo, audio = initialAudio, lastVideo = started, lastAudio = started;
+        while (SystemClock.elapsedRealtime() < deadline) {
+            JSONObject state = status();
+            require(!"error".equals(state.optString("state")), "live playback reported an error during soak");
+            require(pid.equals(state.optString("pid")), "soak switched to an unexpected channel");
+            snapshot(false);
+            long position = state.optLong("positionMs");
+            if (position > lastPosition) { lastPosition = position; lastAdvance = SystemClock.elapsedRealtime(); }
+            if (state.optLong("videoFrames") > video) { video = state.optLong("videoFrames"); lastVideo = SystemClock.elapsedRealtime(); }
+            if (state.optLong("audioFrames") > audio) { audio = state.optLong("audioFrames"); lastAudio = SystemClock.elapsedRealtime(); }
+            require(SystemClock.elapsedRealtime() - lastVideo < 15000 && SystemClock.elapsedRealtime() - lastAudio < 15000,
+                    "one native media track stopped advancing during soak");
+            require(SystemClock.elapsedRealtime() - lastAdvance < 30000, "media position stalled during soak");
+            if (SystemClock.elapsedRealtime() - started >= durationSeconds * 1000L && position >= targetPosition && state.optLong("videoFrames") > initialVideo
+                    && state.optLong("audioFrames") > initialAudio && "playing".equals(state.optString("state"))) {
+                currentStep.put("elapsedWallMs", SystemClock.elapsedRealtime() - started).put("requestedSeconds", durationSeconds)
+                        .put("mediaPositionAdvancedMs", position - initial.optLong("positionMs"))
+                        .put("videoFramesAdvanced", state.optLong("videoFrames") - initialVideo)
+                        .put("audioFramesAdvanced", state.optLong("audioFrames") - initialAudio)
+                        .put("tenMinuteMediaGatePassed", durationSeconds >= 600 && position - initial.optLong("positionMs") >= 600000);
+                snapshot(true); complete(); return;
+            }
+            SystemClock.sleep(1000);
+        }
+        throw new CheckFailure("soak did not reach the required advancing media position");
+    }
+
+    private void component() throws Exception {
+        begin("generated-baseline-AVC-AAC-platform-output");
+        main(() -> {
+            NativeBridge.pause(session());
+            Button full = findButton(activity.getWindow().getDecorView(), resourceString("fullscreen"));
+            if (!boolField("fullscreen") && full != null) full.performClick();
+        });
+        waitCondition(() -> "paused".equals(status().optString("state")), 15000, "cannot pause live output before isolated component probe");
+        System.load(new File(getContext().getApplicationInfo().nativeLibraryDir, "libatv_output_probe.so").getAbsolutePath());
+        byte[] transport;
+        try (InputStream input = getContext().getAssets().open("baseline-avc-aac.ts");
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096]; int count;
+            while ((count = input.read(buffer)) >= 0) output.write(buffer, 0, count);
+            transport = output.toByteArray();
+        }
+        try {
+            android.view.SurfaceHolder holder = ((android.view.SurfaceView) viewField("surface")).getHolder();
+            JSONObject probe = new JSONObject(OutputProbe.run(holder.getSurface(), transport));
+            currentStep.put("outputProbe", probe);
+            require(!probe.has("failure"), "generated fixture failed native AV output");
+            require(probe.optLong("videoFrames") >= 110 && probe.optLong("audioFrames") >= 198000
+                    && probe.optLong("nonzeroPcmSamples") > 10000, "generated fixture did not produce advancing video and nonzero PCM");
+            android.graphics.Bitmap screenshot = getUiAutomation().takeScreenshot();
+            require(screenshot != null, "cannot capture generated video presentation");
+            final Rect bounds = new Rect(); main(() -> viewField("surface").getGlobalVisibleRect(bounds));
+            int colorful = 0;
+            for (int y = Math.max(0, bounds.top); y < Math.min(screenshot.getHeight(), bounds.bottom); y += 8)
+                for (int x = Math.max(0, bounds.left); x < Math.min(screenshot.getWidth(), bounds.right); x += 8) {
+                    int pixel = screenshot.getPixel(x, y), r = android.graphics.Color.red(pixel),
+                            g = android.graphics.Color.green(pixel), b = android.graphics.Color.blue(pixel);
+                    if (Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b)) > 80) colorful++;
+                }
+            screenshot.recycle(); currentStep.put("colorfulSurfaceSamples", colorful);
+            require(colorful > 20, "generated color pattern was not visible on the output Surface");
+            complete();
+        } finally { OutputProbe.close(); }
+    }
+
+    private void finishActivity() throws Exception {
+        if (activity == null) return;
+        begin("finish-and-native-resource-release");
+        long old = session();
+        main(() -> activity.finish());
+        waitCondition(() -> activity.isDestroyed() && session() == 0, 10000, "activity finish did not release its surface handle");
+        awaitReleased(old);
+        complete();
+        activity = null;
+    }
+
+    private void awaitReleased(long old) throws Exception {
+        waitCondition(() -> (old == 0 || "idle".equals(new JSONObject(NativeBridge.status(old)).optString("state")))
+                        && nativeThreads().optInt("render") == 0 && nativeThreads().optInt("network") == 0,
+                15000, "destroyed native handle or native worker threads remained live");
+        currentStep.put("releasedHandleState", old == 0 ? "already-released" : new JSONObject(NativeBridge.status(old)).optString("state"))
+                .put("nativeThreadsAfterRelease", nativeThreads());
+    }
+
+    private void selectChannel(String[] channel) throws Exception {
+        JSONObject previous = status();
+        main(() -> {
+            if (boolField("fullscreen")) throw new CheckFailure("channel UI selection requires sidebar visible");
+            Button group = findButton(activity.getWindow().getDecorView(), resourceString("weishi".equals(channel[2]) ? "satellite" : "cctv"));
+            require(group != null && group.performClick(), "cannot select channel group");
+            View row = channelRows().findViewWithTag(channel[1]);
+            require(row != null && row.performClick(), "cannot select requested channel row");
+        });
+        waitForIdleSync();
+        long deadline = SystemClock.elapsedRealtime() + 5000;
+        boolean acknowledged = false;
+        do {
+            JSONObject state = status();
+            acknowledged = channel[1].equals(state.optString("pid"))
+                    && (!channel[1].equals(previous.optString("pid"))
+                    || "loading".equals(state.optString("state"))
+                    || state.optLong("videoFrames") < previous.optLong("videoFrames")
+                    || state.optLong("audioFrames") < previous.optLong("audioFrames")
+                    || state.optLong("videoFrames") == 0);
+            if (acknowledged) break;
+            SystemClock.sleep(20);
+        } while (SystemClock.elapsedRealtime() < deadline);
+        require(acknowledged, "native renderer did not acknowledge channel selection");
+    }
+
+    private JSONObject awaitPlaying(String pid) throws Exception {
+        final AtomicReference<JSONObject> ready = new AtomicReference<>();
+        waitCondition(() -> {
+            JSONObject state = status(); snapshot(false);
+            require(!pid.equals(state.optString("pid")) || !"error".equals(state.optString("state")),
+                    "native playback entered error while loading");
+            boolean playing = pid.equals(state.optString("pid")) && "playing".equals(state.optString("state"))
+                    && state.optLong("videoFrames") > 0 && state.optLong("audioFrames") > 0
+                    && state.optInt("videoWidth") > 0 && state.optInt("videoHeight") > 0;
+            if (playing) ready.set(state);
+            return playing;
+        }, channelTimeoutMs, "live channel did not produce native audio and video");
+        return ready.get();
+    }
+
+    private void awaitProgress(String pid, int seconds) throws Exception {
+        JSONObject first = awaitPlaying(pid);
+        long until = SystemClock.elapsedRealtime() + seconds * 1000L;
+        while (SystemClock.elapsedRealtime() < until) { snapshot(false); SystemClock.sleep(250); }
+        JSONObject next = status();
+        require(pid.equals(next.optString("pid")) && "playing".equals(next.optString("state")), "channel did not remain playing");
+        require(next.optLong("videoFrames") > first.optLong("videoFrames")
+                && next.optLong("audioFrames") > first.optLong("audioFrames")
+                && next.optLong("positionMs") > first.optLong("positionMs"), "native audio/video counters or media time did not advance");
+        snapshot(true);
+    }
+
+    private JSONObject status() throws Exception {
+        long handle = session();
+        return handle == 0 ? new JSONObject().put("state", "idle") : new JSONObject(NativeBridge.status(handle));
+    }
+    private long session() throws Exception { return ((Number) field("session")).longValue(); }
+    private String selectedPid() throws Exception {
+        Object selected = field("selected"); Field pid = selected.getClass().getDeclaredField("pid"); pid.setAccessible(true); return (String) pid.get(selected);
+    }
+    private ViewGroup channelRows() throws Exception { return (ViewGroup) field("channelRows"); }
+    private View viewField(String name) throws Exception { return (View) field(name); }
+    private boolean boolField(String name) throws Exception { return (Boolean) field(name); }
+    private Object field(String name) throws Exception {
+        AtomicReference<Object> value = new AtomicReference<>(); AtomicReference<Exception> error = new AtomicReference<>();
+        Runnable read = () -> { try { Field f = MainActivity.class.getDeclaredField(name); f.setAccessible(true); value.set(f.get(activity)); } catch (Exception e) { error.set(e); } };
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) read.run(); else runOnMainSync(read);
+        if (error.get() != null) throw error.get(); return value.get();
+    }
+    private String resourceString(String name) { return getTargetContext().getString(getTargetContext().getResources().getIdentifier(name, "string", PACKAGE)); }
+    private Button findButton(View view, String text) {
+        if (view instanceof Button && text.contentEquals(((Button) view).getText())) return (Button) view;
+        if (view instanceof ViewGroup) for (int i = 0; i < ((ViewGroup) view).getChildCount(); i++) {
+            Button found = findButton(((ViewGroup) view).getChildAt(i), text); if (found != null) return found;
+        }
+        return null;
+    }
+    private JSONObject nativeThreads() throws Exception {
+        int render = 0, network = 0; File[] tasks = new File("/proc/self/task").listFiles();
+        require(tasks != null, "cannot inspect native worker threads");
+        for (File task : tasks) {
+            try (BufferedReader input = new BufferedReader(new InputStreamReader(new FileInputStream(new File(task, "comm")), StandardCharsets.UTF_8))) {
+                String name = input.readLine(); if ("atv-render".equals(name)) render++; if ("atv-network".equals(name)) network++;
+            } catch (java.io.FileNotFoundException ignored) { /* A thread can exit between listing and reading. */ }
+        }
+        return new JSONObject().put("render", render).put("network", network);
+    }
+    private void begin(String name) throws Exception {
+        currentStep = new JSONObject().put("name", name).put("startedElapsedMs", SystemClock.elapsedRealtime());
+        snapshots = new JSONArray(); currentStep.put("snapshots", snapshots); steps.put(currentStep); lastSnapshot = 0;
+    }
+    private void complete() throws Exception { snapshot(true); currentStep.put("passed", true).put("finishedElapsedMs", SystemClock.elapsedRealtime()); }
+    private void snapshot(boolean force) throws Exception {
+        long now = SystemClock.elapsedRealtime(); if (snapshots == null || (!force && now - lastSnapshot < 5000) || snapshots.length() >= 1500) return;
+        JSONObject raw = status(), safe = new JSONObject().put("elapsedMs", now);
+        for (String key : new String[]{"state","pid","positionMs","videoWidth","videoHeight","videoFrames","audioFrames","errorCode"}) if (raw.has(key)) safe.put(key, raw.get(key));
+        if (raw.has("buffers")) safe.put("buffers", raw.getJSONObject("buffers"));
+        android.os.Debug.MemoryInfo memory = new android.os.Debug.MemoryInfo();
+        android.os.Debug.getMemoryInfo(memory);
+        Runtime runtime = Runtime.getRuntime();
+        safe.put("processCpuMs", android.os.Process.getElapsedCpuTime())
+                .put("totalPssKiB", memory.getTotalPss())
+                .put("privateDirtyKiB", memory.getTotalPrivateDirty())
+                .put("nativePssKiB", memory.nativePss)
+                .put("dalvikPssKiB", memory.dalvikPss)
+                .put("nativeHeapAllocatedBytes", android.os.Debug.getNativeHeapAllocatedSize())
+                .put("javaHeapUsedBytes", runtime.totalMemory() - runtime.freeMemory());
+        safe.put("nativeThreads", nativeThreads()); snapshots.put(safe); lastSnapshot = now;
+    }
+    private interface Operation { void run() throws Exception; }
+    private interface Condition { boolean ready() throws Exception; }
+    private void main(Operation action) throws Exception {
+        AtomicReference<Exception> error = new AtomicReference<>(); runOnMainSync(() -> { try { action.run(); } catch (Exception e) { error.set(e); } });
+        if (error.get() != null) throw error.get();
+    }
+    private void waitCondition(Condition condition, long timeoutMs, String failure) throws Exception {
+        long deadline = SystemClock.elapsedRealtime() + timeoutMs;
+        do { if (condition.ready()) return; SystemClock.sleep(250); } while (SystemClock.elapsedRealtime() < deadline);
+        throw new CheckFailure(failure);
+    }
+    private static void require(boolean condition, String message) throws CheckFailure { if (!condition) throw new CheckFailure(message); }
+    private static final class CheckFailure extends Exception { CheckFailure(String message) { super(message); } }
+    private static String digestFile(String path) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256"); byte[] buffer = new byte[32768];
+        try (FileInputStream input = new FileInputStream(path)) { int n; while ((n = input.read(buffer)) != -1) digest.update(buffer, 0, n); }
+        StringBuilder result = new StringBuilder(); for (byte b : digest.digest()) result.append(String.format(java.util.Locale.ROOT, "%02x", b & 255)); return result.toString();
+    }
+}

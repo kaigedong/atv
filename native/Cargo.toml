@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/atv-core", "crates/atv-android", "crates/atv-auth", "crates/atv-cmg", "crates/atv-media", "crates/atv-player", "crates/atv-desktop", "crates/atv-apple", "tests/android-output-probe"]
+# Android builds and portable core tests need no desktop multimedia SDK.
+default-members = ["crates/atv-core", "crates/atv-android", "crates/atv-auth", "crates/atv-cmg", "crates/atv-media", "crates/atv-player"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+aes = "0.8.4"
+cbc = { version = "0.1.2", features = ["alloc", "block-padding"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+strip = "debuginfo"

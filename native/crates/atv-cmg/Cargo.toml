@@ -1,0 +1,8 @@
+[package]
+name = "atv-cmg"
+version = "0.1.0"
+edition = "2024"
+description = "CMG AVC signalling and media transform boundary"
+license = "MIT"
+
+[dependencies]
