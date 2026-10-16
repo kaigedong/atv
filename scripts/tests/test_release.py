@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -99,6 +100,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertLess(release.release_code("v0.1.0-r1009"), release.release_code("v0.1.0-r1010"))
         with self.assertRaises(ValueError):
             release.release_code("v9.0.0")
+
+    def test_draft_without_public_tag_is_resumed_by_id(self):
+        draft = {"id": 42, "tag_name": "v0.1.0-r1006", "draft": True}
+        with patch.object(release, "api", side_effect=[None, [draft]]) as api:
+            self.assertEqual(release.find_release(draft["tag_name"]), draft)
+            self.assertEqual(api.call_args_list[1].args, ("releases?per_page=100",))
 
     def test_next_commit_increases_apk_version_and_rerun_keeps_version(self):
         with tempfile.TemporaryDirectory() as name:

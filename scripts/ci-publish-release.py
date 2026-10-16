@@ -100,13 +100,26 @@ def command(arguments):
     return result.stdout.strip()
 
 
-def api(path, optional=False):
-    result = subprocess.run(["gh", "api", f"repos/{REPO}/" + path], capture_output=True, text=True)
+def api(path, optional=False, method="GET", payload=None):
+    arguments = ["gh", "api", f"repos/{REPO}/" + path, "--method", method]
+    if payload is not None:
+        arguments += ["--input", "-"]
+    result = subprocess.run(arguments, input=json.dumps(payload) if payload is not None else None,
+                            capture_output=True, text=True)
     if optional and result.returncode and "HTTP 404" in result.stderr:
         return None
     if result.returncode:
         raise RuntimeError("GitHub release metadata request failed")
     return json.loads(result.stdout)
+
+
+def find_release(tag):
+    # The tag endpoint only returns published releases. Drafts have no public
+    # tag until publication; authenticated list/ID endpoints expose them.
+    published = api("releases/tags/" + tag, optional=True)
+    if published:
+        return published
+    return next((item for item in api("releases?per_page=100") if item["tag_name"] == tag), None)
 
 
 def check_remote_assets(release, files, complete):
@@ -139,7 +152,7 @@ def main():
     prepare(args.input, args.output, version, identity["certificateSha256"])
     files = sorted(args.output.iterdir())
     tag = version["tag"]
-    release = api("releases/tags/" + tag, optional=True)
+    release = find_release(tag)
     latest = api("releases/latest", optional=True)
     if latest and latest["tag_name"] != tag and release_code(latest["tag_name"]) >= version["versionCode"]:
         raise ValueError("Refusing to replace a newer release with an older build")
@@ -162,19 +175,20 @@ def main():
             f'Android versionCode：{version["versionCode"]}\n'
             f'构建记录：https://github.com/{REPO}/actions/runs/{os.environ["GITHUB_RUN_ID"]}\n',
             encoding="utf-8")
-        command(["release", "create", tag, "--repo", REPO, "--target", version["sourceCommit"],
-                 "--title", "ATV " + version["versionName"], "--draft", "--notes-file", str(notes)])
-        release = api("releases/tags/" + tag)
+        release = api("releases", method="POST", payload={
+            "tag_name": tag, "target_commitish": version["sourceCommit"],
+            "name": "ATV " + version["versionName"], "draft": True, "prerelease": False,
+            "body": notes.read_text(encoding="utf-8")})
     missing = check_remote_assets(release, files, complete=False)
     if missing:
         command(["release", "upload", tag, "--repo", REPO, *[str(p) for p in files if p.name in missing]])
-    release = api("releases/tags/" + tag)
+    release = api("releases/" + str(release["id"]))
     check_remote_assets(release, files, complete=True)
     if api("commits/main")["sha"] != version["sourceCommit"]:
         print("Newer main commit arrived; leaving this complete draft unpublished")
         return
-    command(["release", "edit", tag, "--repo", REPO, "--draft=false", "--latest"])
-    published = api("releases/tags/" + tag)
+    published = api("releases/" + str(release["id"]), method="PATCH",
+                    payload={"draft": False, "make_latest": "true"})
     if published["draft"] or published["prerelease"]:
         raise ValueError("Release was not published to the public update channel")
     check_remote_assets(published, files, complete=True)
