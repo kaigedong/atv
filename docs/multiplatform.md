@@ -1,4 +1,4 @@
-> 2026-10-16 更新：已增加 Apple 原生 C ABI、Swift/AVFoundation 输出及 macOS／iOS／tvOS 构建工程。C ABI 在 Linux 通过编译和边界测试；Xcode 编译与 Apple 真机播放尚未验证，见 [apple-native.md](apple-native.md)。Android 已增加 API 19／32 位兼容构建，见 [android-kitkat.md](android-kitkat.md)。下文平台验收表保留当时的证据范围。
+> 2026-10-16 更新：Apple 五个目标已通过真实 Xcode CI 编译；Linux x86_64 / ARM64 原生宿主、Android 通用及四个单 ABI 包、三系统共享核心检查也已通过。Apple 设备安装与播放仍未验收，见 [apple-native.md](apple-native.md)。Android API 19／32 位兼容范围见 [android-kitkat.md](android-kitkat.md)。下文早期运行记录保留原有证据范围。
 
 # 多平台原生架构
 
@@ -123,12 +123,12 @@ Android 继续独立构建：
 | 共享 Rust 核心 | 本机 Linux 编译、50 项普通测试、严格 Clippy；新增 5 项生命周期／线程／背压策略测试 | 不用脚本化输出测试冒充实际播放 |
 | Android | arm64-v8a / x86_64 构建、lint、无 JS/WebView/WASM 的 APK 检查；重构版真实 smoke 通过 | 实体电视／物理硬件解码仍未测试 |
 | Linux 桌面 | GStreamer + SDL 真正解码、绘制、输出 PCM；120 秒直播记录与独立进程音频流采样，见下文 | 完整桌面频道侧栏、安装包分发和更广泛硬件覆盖 |
-| Windows / macOS | 同一共享库接口；已加入三系统 CI 配置 | CI 尚未远端运行；未声称构建或播放验收通过；桌面原生 SDK 配置与打包仍需验证 |
-| iOS / 其他平台 | 输出接口允许主线程驱动，可接入平台后端 | 没有实现或验证对应应用与后端 |
+| Windows | 共享核心测试、Clippy 与架构检查已在远端 CI 通过 | 尚无 Windows 桌面宿主 |
+| macOS / iOS / tvOS | 已实现 Swift/AVFoundation 宿主；五目标实际 Xcode 编译及应用归档通过 | 设备安装与真实音视频播放尚未验收 |
 
-CI 配置见 `.github/workflows/native-portability.yml`，分别运行 Linux / Windows /
-macOS 的共享核心测试，以及 Linux 桌面构建。不把仅存在 workflow 文件
-当作 CI 已通过。`check-native-architecture.py` 检查 crate 依赖方向、共享源码
+CI 配置见 `.github/workflows/native-portability.yml`；完整成功记录见
+[12 项成功检查](https://github.com/kaigedong/atv/actions/runs/38859480388)。
+`check-native-architecture.py` 检查 crate 依赖方向、共享源码
 平台符号、实际 Cargo 依赖树和目录副本一致性；它不证明运行时播放。
 
 本机证据：

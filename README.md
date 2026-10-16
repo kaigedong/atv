@@ -9,6 +9,8 @@
 Android 支持 `armeabi-v7a`、`arm64-v8a`、`x86`、`x86_64`；Apple 包默认未签名，真机安装需要自己的签名配置。
 具体目标、产物与限制见 [自动构建](docs/ci.md)，公开内容审查规则见 [发布与隐私](docs/publication.md)。
 
+已验证的 [完整成功构建](https://github.com/kaigedong/atv/actions/runs/38859480388) 包含 12 项通过的检查与 8 个下载 artifact；编译通过与真机播放验收分别记录。
+
 ## Android 构建
 
 ```sh
@@ -40,8 +42,8 @@ GitHub 自动构建提供通用包与单 ABI 包；旧 ARMv7 盒子请选择 `ar
 
 - Android 适配层：32 位通过 Rust/JNI 调用系统 MediaCodec／AudioTrack；64 位使用 NDK MediaCodec，运行时加载 AAudio，Android 5–7 回退 AudioTrack。
 - Linux 桌面适配层：GStreamer 解码、SDL2 原生窗口／音频／键盘，已验证真实音视频。
-- Apple 适配层：共享 Rust 核心＋C ABI＋Swift/AVFoundation，提供 macOS、iOS、tvOS 原生工程与构建脚本；当前 Linux 环境已验证 C ABI，Apple 安装包尚未实际编译和播放验收。
-- Windows：已配置共享核心 CI，尚未完成桌面宿主验收。
+- Apple 适配层：共享 Rust 核心＋C ABI＋Swift/AVFoundation，macOS、iOS、tvOS 及模拟器五个目标已由 GitHub Mac runner 实际编译并生成未签名应用；设备安装与播放尚未验收。
+- Windows：共享核心测试与检查已在 CI 通过；尚无 Windows 桌面宿主。
 
 ```sh
 ./scripts/native-desktop.sh

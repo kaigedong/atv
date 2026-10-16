@@ -4,6 +4,10 @@
 以及 Actions 手动触发时执行。先通过发布与隐私检查，再并行测试和构建各平台。
 所有 Actions 固定完整提交 SHA；工作流仅有 `contents: read` 权限，checkout 不持久化凭证。
 
+2026-10-16 的 [完整成功运行](https://github.com/kaigedong/atv/actions/runs/38859480388)
+对应代码提交 `9c43472`：12 项检查全部通过，8 个 artifact 已上传。
+本轮后的纯文档状态同步提交使用 `[skip ci]` 避免重复编译，应用与构建源码仍与该成功运行一致。
+
 | 目标 | 产物 / Actions artifact | 构建范围 |
 | --- | --- | --- |
 | Android 4.4+ | `atv-android` | 通用四 ABI 和 ARMv7、ARM64、x86、x86_64 单 ABI；各含 debug 与 unsigned release APK |

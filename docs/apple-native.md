@@ -1,8 +1,9 @@
 # Apple 原生适配与验收状态
 
 2026-10-16：已实现 macOS／iOS／tvOS 的原生源码、Rust C ABI、Swift/AVFoundation
-媒体适配层和 Xcode 构建入口。**当前机器是 Linux；没有声称已编译出 Apple
-安装包，也没有声称 Apple TV 实机能播放。**
+媒体适配层和 Xcode 构建入口。GitHub Mac runner 已实际编译 macOS、iOS、
+iOS 模拟器、tvOS 和 tvOS 模拟器五个目标，并上传未签名应用归档。
+**当前本机仍是 Linux；Apple 设备安装、画面、音频及实际播放尚未验收。**
 
 ## 架构
 
@@ -75,9 +76,10 @@ Xcode 工程、编译 Swift 应用，再检查 app 资源及 Mach-O 直接依赖
 真实 Rust release staticlib 的 C 程序检查。覆盖布局、字符串输出缓冲区、
 线程归属、无效 handle 和销毁后的访问；没有启动虚假的 Apple 解码器。
 
-GitHub Actions 增加五个 Apple 编译目标，但当前仓库没有远端，未触发云端 CI。
-Swift／AVFoundation 源码尚未经过 Xcode 编译，API 使用、AAC sample buffer 输出、
-遥控器焦点、A/V 同步、后台恢复和长时间播放必须在 Mac／Apple TV 上继续验收。
+五个 Apple 目标已在 [GitHub Actions 成功构建](https://github.com/kaigedong/atv/actions/runs/38859480388)，
+包含 Rust 静态库、Swift／AVFoundation 的真实 Xcode 编译、Mach-O 依赖与资源检查。
+首次云端编译发现的 tvOS 键盘快捷键 API 问题已修正，tvOS 全屏切台改用遥控移动命令。
+AAC sample buffer 输出、遥控器焦点、A/V 同步、后台恢复和长时间播放仍需在 Mac／Apple TV 上验收。
 Linux 构建入口遇到 Apple 目标会明确报缺少 Mac／SDK，不生成占位安装包。
 
 使用的 Apple API 约定参考：
