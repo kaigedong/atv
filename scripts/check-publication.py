@@ -14,6 +14,14 @@ import subprocess
 GENERATED_TS = "app/src/androidTest/assets/baseline-avc-aac.ts"
 GENERATED_TS_SHA256 = "48c190a34500d07161f1301fc88acb711b327a120e2b6d725e4f2a32a75be4a6"
 REVIEWED_BINARIES = {
+    # Reviewed ATV launcher artwork, pinned to exact content.
+    "app/src/main/res/drawable-xhdpi/tv_banner.png": "1eab182f05ece898293016cfc240f34c072ba5b9966fdf1b3075276575a2f81c",
+    "app/src/main/res/mipmap-ldpi/ic_launcher.png": "b176edce81c961ede344e4e4e00791381eede44496668a1847cd0388a3422295",
+    "app/src/main/res/mipmap-mdpi/ic_launcher.png": "b6cca7a27dfc21631661020e6feb62085ab600d5e4818184081d57d74f3b34a3",
+    "app/src/main/res/mipmap-hdpi/ic_launcher.png": "bd55a14826c886b29e25d344b8758250fcb8c106a9e1e243c1827fc3f7ac347c",
+    "app/src/main/res/mipmap-xhdpi/ic_launcher.png": "8d1bf596a2d2e21bc22501c98b9e70b2b1107b58b72b35e38123882c4da0e5e7",
+    "app/src/main/res/mipmap-xxhdpi/ic_launcher.png": "aa3d3865e1ed48f03961f4462207bf3f1ee51ad34486fef3e0762510f2f590a7",
+    "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": "e3a28a3bf080fe5583284a0a6757b1ffc1d6213137a3e05d90e29c4efecbcf28",
     GENERATED_TS: GENERATED_TS_SHA256,
     "gradle/wrapper/gradle-wrapper.jar": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f",
 }

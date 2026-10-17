@@ -37,6 +37,18 @@ class PublicationTests(unittest.TestCase):
             self.assertTrue(publication.inspect(path, b"data"))
         self.assertTrue(publication.inspect(publication.GENERATED_TS, b"changed media"))
 
+    def test_reviewed_binaries_require_exact_content_and_path(self):
+        for path in publication.REVIEWED_BINARIES:
+            with self.subTest(path=path):
+                data = (MODULE.parent.parent / path).read_bytes()
+                self.assertFalse(publication.inspect(path, data))
+                for candidate_path, candidate_data in [
+                    (path, data + b"\0changed"),
+                    ("app/src/main/res/drawable/unreviewed.png", data),
+                ]:
+                    rules = {finding["rule"] for finding in publication.inspect(candidate_path, candidate_data)}
+                    self.assertIn("unreviewed-binary-file", rules)
+
     def test_history_catches_a_secret_deleted_from_current_tree(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
