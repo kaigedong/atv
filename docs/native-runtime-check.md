@@ -202,3 +202,38 @@ network、startup-network、lifecycle 和 retry 模式均通过。两种断网�
 退出后 render/network 线程归零。启动卡死 20 秒和单轨停滞 12 秒的精确边界由模拟时钟单元测试验证。
 
 本地运行结果保存在忽略目录 test-artifacts/native/auto-recovery/；未发布广播画面、鉴权数据或设备身份。
+
+## 重新打开后的音频与系统焦点
+
+Activity 恢复或用户明确播放时请求音乐音频焦点；只有在前台且已获得焦点时才允许 Rust 恢复输出。
+退出/进入后台释放焦点，旧回调不能恢复已经关闭的播放器。暂时失去焦点时暂停，重新获得后自动恢复；
+永久失去焦点会清理旧请求，由再次进入窗口或明确播放重新申请。Surface 自动重建不抢占仍在等待的焦点。
+API 26+ 使用媒体 AudioFocusRequest，API 19 使用 STREAM_MUSIC 兼容接口。
+API 19 AudioTrack 在 play 后检查 PLAYSTATE_PLAYING，失败交由已有播放错误恢复策略处理。
+实现不修改系统音量或强制取消用户静音。
+
+新增 audio-lifecycle 模式检查连续三次 Activity 关闭/重开，保持原频道且不通过切台或自动重连修复输出，
+并检查临时/永久焦点竞争、失焦期间 Surface 重建，以及释放后的过期回调。
+audio-focus-basic 在 API 19 上只检查重开和焦点兼容性；该开发镜像无法解码实际直播的 AVC profile，
+因此它的通过不代表 API 19 真实直播声音通过。
+
+宿主机验收工具会关联同一台模拟器的 instrumentation 与真实输出 sink，分别采样首次播放、三次重开、
+失去焦点的静音对照和重新获得焦点后的声音。静音对照先单独排空混音器尾音，再要求完整采样窗口没有非零样本。
+每次结果都绑定 APK SHA-256，只保留样本统计和 PCM 哈希，不保存音频。采集必须使用不存在的新输出目录，避免读取旧结果。
+
+```sh
+# 使用已有安装 grpcio / cryptography 的开发虚拟环境 Python。
+python scripts/android-audio-reopen-check.py \
+  --serial emulator-5572 --endpoint 127.0.0.1:8556 \
+  --discovery-file "${XDG_RUNTIME_DIR}/avd/running/pid_EMULATOR_PID.ini" \
+  --output test-artifacts/native/audio-reopen/final-tv
+ATV_TEST_DEVICE=emulator-5574 ATV_TEST_MODE=audio-focus-basic ./scripts/android-runtime-check.sh
+```
+
+旧版在 TV 模拟器上的三次重开基线也有非静音输出，因此尚未在开发模拟器复现用户电视的静音。
+已确认的缺口是原实现没有管理音频焦点；物理电视的音频服务 dumpsys 被 DUMP 权限拒绝，不能用于判断焦点或静音状态。
+本轮未在物理电视安装或操作播放。焦点生命周期和真实模拟器输出验证不能代替该电视更新后的实际试听。
+
+本轮最终 APK 的四 ABI 构建、lint、API 19 audio-focus-basic、TV audio-lifecycle、groups 和 lifecycle 全部通过。
+六个实际输出采样阶段均通过：首次播放、三次重开和重新获得焦点后均有非零声音样本；失焦后排空尾音的对照窗口为零样本。
+本地结果位于 test-artifacts/native/audio-reopen/verified-tv/，旧版兼容结果位于同目录下的 api19/。

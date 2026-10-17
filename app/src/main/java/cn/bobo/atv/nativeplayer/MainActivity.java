@@ -62,6 +62,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private String group = "yangshi";
     private long session;
     private boolean resumed, fullscreen;
+    private PlaybackAudioFocus audioFocus;
     private OnBackInvokedCallback backCallback;
     private int videoWidth, videoHeight;
     private long lastStatusLog;
@@ -99,6 +100,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        audioFocus = new PlaybackAudioFocus(this, handler, this::syncPlaybackAudioFocus);
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
@@ -261,7 +264,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         else focusGroup();
     }
 
-    private void select(Channel channel) {
+    private void select(Channel channel) { select(channel, true); }
+
+    private void select(Channel channel, boolean explicitPlayback) {
         if (channel == null) return;
         selected = channel; title.setText(channel.name);
         getPreferences(MODE_PRIVATE).edit().putString("pid", channel.pid).apply();
@@ -272,7 +277,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         retry.setVisibility(View.GONE);
         if (!NativeBridge.available()) { showError(getString(R.string.native_unavailable)); return; }
         if (session == 0) return;
-        try { NativeBridge.select(session, channel.pid, channel.streamId); }
+        try {
+            if (resumed) {
+                if (explicitPlayback) audioFocus.acquireForPlayback();
+                else audioFocus.acquire();
+            }
+            syncPlaybackAudioFocus();
+            NativeBridge.select(session, channel.pid, channel.streamId);
+        }
         catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
     }
 
@@ -285,9 +297,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             catch (RuntimeException ignored) { }
             session = NativeBridge.create(holder.getSurface(), sampleRate, getFilesDir().getAbsolutePath());
             if (session == 0) { showError(getString(R.string.native_failure)); return; }
-            if (!resumed) NativeBridge.pause(session);
+            if (!resumed || !audioFocus.hasFocus()) NativeBridge.pause(session);
             NativeBridge.quality(session, preferredQuality);
-            select(selected);
+            select(selected, false);
         } catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
     }
 
@@ -401,23 +413,40 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     @Override protected void onResume() {
         super.onResume(); resumed = true;
-        if (session != 0) try { NativeBridge.resume(session); }
-        catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
+        if (NativeBridge.available()) audioFocus.acquire();
+        syncPlaybackAudioFocus();
         handler.post(poll); hideSystemBars();
         if (!automaticCheckStarted) handler.postDelayed(automaticCheck, 10000);
     }
     @Override protected void onPause() {
         resumed = false; handler.removeCallbacks(poll);
         handler.removeCallbacks(automaticCheck);
-        if (session != 0) try { NativeBridge.pause(session); }
-        catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
+        syncPlaybackAudioFocus();
+        audioFocus.abandon();
         super.onPause();
     }
+    private void syncPlaybackAudioFocus() {
+        if (session == 0) return;
+        try {
+            if (resumed && audioFocus.hasFocus()) NativeBridge.resume(session);
+            else NativeBridge.pause(session);
+        } catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // Android 15+ can deny an initial request before the Activity becomes the top app.
+        if (hasFocus && resumed && audioFocus != null && !audioFocus.hasRequest() && NativeBridge.available())
+            audioFocus.acquire();
+    }
+
     @Override protected void onSaveInstanceState(Bundle state) {
         if (selected != null) state.putString("pid", selected.pid);
         super.onSaveInstanceState(state);
     }
     @Override protected void onDestroy() {
+        resumed = false;
+        audioFocus.abandon();
         handler.removeCallbacks(automaticCheck);
         if (qualityDialog != null) qualityDialog.dismiss();
         if (messageDialog != null) messageDialog.dismiss();

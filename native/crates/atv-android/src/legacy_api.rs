@@ -521,7 +521,18 @@ pub(crate) unsafe fn AAudioStream_getFormat(_: *mut AAudioStream) -> i32 {
 pub(crate) unsafe fn AAudioStream_requestStart(s: *mut AAudioStream) -> i32 {
     java(|env| {
         env.call_method((*s).object.as_obj(), "play", "()V", &[])?;
-        Ok(0)
+        // An initialized track is not necessarily playing after an output restart.
+        Ok(
+            if env
+                .call_method((*s).object.as_obj(), "getPlayState", "()I", &[])?
+                .i()?
+                == 3
+            {
+                0
+            } else {
+                -1
+            },
+        )
     })
     .unwrap_or(-1)
 }

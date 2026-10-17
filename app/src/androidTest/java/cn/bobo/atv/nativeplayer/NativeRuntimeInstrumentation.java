@@ -78,6 +78,8 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "all": smoke(); soak(); break;
                 case "soak": selectChannel(CHANNELS[2]); awaitProgress(CHANNELS[2][1], 3); soak(); break;
                 case "lifecycle": selectChannel(CHANNELS[0]); awaitProgress(CHANNELS[0][1], 3); lifecycle(); break;
+                case "audio-lifecycle": audioLifecycle(); break;
+                case "audio-focus-basic": audioFocusBasic(); break;
                 case "retry": selectChannel(CHANNELS[0]); awaitProgress(CHANNELS[0][1], 3); retry(); break;
                 case "remote": navigationAndFullscreen(); break;
                 case "groups": groupNavigation(); break;
@@ -736,6 +738,163 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 output.write(bytes, 0, length);
             }
             return output.toString(StandardCharsets.UTF_8.name());
+        }
+    }
+
+    private PlaybackAudioFocus playbackAudioFocus() throws Exception {
+        return (PlaybackAudioFocus) field("audioFocus");
+    }
+
+    private void audioProbe(String stage, boolean audible) throws Exception {
+        int seconds = boundedArgument("audioProbeSeconds", 0, 0, 30);
+        if (seconds == 0) return;
+        Bundle signal = new Bundle();
+        signal.putString("audioProbeStage", stage);
+        signal.putString("audioProbeExpectation", audible ? "audible" : "silent");
+        sendStatus(2, signal);
+        SystemClock.sleep(seconds * 1000L);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void audioLifecycle() throws Exception {
+        begin("initial-audio-focus-and-output");
+        selectChannel(CHANNELS[0]);
+        awaitProgress(CHANNELS[0][1], 3);
+        require(playbackAudioFocus().hasFocus(), "initial playback did not acquire audio focus");
+        audioProbe("initial", true);
+        complete();
+        for (int index = 1; index <= 3; index++) {
+            begin("finish-before-audio-reopen-" + index);
+            MainActivity oldActivity = activity;
+            PlaybackAudioFocus oldFocus = playbackAudioFocus();
+            long oldHandle = session();
+            main(() -> oldActivity.finish());
+            waitCondition(oldActivity::isDestroyed, 10000, "finished Activity was not destroyed");
+            require(!oldFocus.hasFocus() && !oldFocus.hasRequest(), "finished Activity retained audio focus");
+            complete();
+            // Reopen as soon as the old Activity is destroyed, without selecting any channel.
+            launch();
+            begin("remembered-channel-audio-reopen-" + index);
+            require(session() != oldHandle, "reopened Activity reused a destroyed native session");
+            require(CHANNELS[0][1].equals(selectedPid()), "reopen did not restore the remembered channel");
+            awaitProgress(CHANNELS[0][1], 3);
+            require(playbackAudioFocus().hasFocus(), "reopened playback did not reacquire audio focus");
+            require(status().optLong("reconnectAttempts") == 0, "reopen required an automatic reconnect workaround");
+            waitCondition(() -> nativeThreads().optInt("render") == 1, 5000, "old renderer survived the audio reopen");
+            currentStep.put("reopenedWithoutChannelSelection", true).put("audioFocusReacquired", true);
+            audioProbe("reopened-" + index, true);
+            complete();
+        }
+        begin("temporary-audio-focus-loss-and-regain");
+        android.media.AudioManager manager = (android.media.AudioManager) activity.getSystemService(Activity.AUDIO_SERVICE);
+        android.media.AudioManager.OnAudioFocusChangeListener competing = change -> { };
+        long handle = session();
+        try {
+            main(() -> require(manager.requestAudioFocus(competing, android.media.AudioManager.STREAM_MUSIC,
+                    android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED,
+                    "competing temporary focus request was denied"));
+            waitCondition(() -> !playbackAudioFocus().hasFocus() && "paused".equals(status().optString("state")),
+                    5000, "temporary focus loss did not pause native output");
+            SystemClock.sleep(1500);
+            audioProbe("focus-lost", false);
+            main(() -> manager.abandonAudioFocus(competing));
+            waitCondition(() -> playbackAudioFocus().hasFocus(), 5000, "released competing focus did not restore player focus");
+            awaitProgress(CHANNELS[0][1], 3);
+            require(session() == handle, "focus regain replaced the Surface session");
+            audioProbe("focus-regained", true);
+            currentStep.put("resumedWithoutChannelSelection", true).put("sameNativeSession", true);
+            complete();
+        } finally {
+            main(() -> manager.abandonAudioFocus(competing));
+        }
+        begin("stale-focus-callback-after-release");
+        java.lang.reflect.Field listenerField = PlaybackAudioFocus.class.getDeclaredField("listener");
+        listenerField.setAccessible(true);
+        android.media.AudioManager.OnAudioFocusChangeListener stale =
+                (android.media.AudioManager.OnAudioFocusChangeListener) listenerField.get(playbackAudioFocus());
+        main(() -> {
+            playbackAudioFocus().abandon();
+            stale.onAudioFocusChange(android.media.AudioManager.AUDIOFOCUS_GAIN);
+        });
+        waitForIdleSync();
+        require(!playbackAudioFocus().hasFocus() && !playbackAudioFocus().hasRequest(), "stale callback revived abandoned audio focus");
+        waitCondition(() -> "paused".equals(status().optString("state")), 3000, "stale callback resumed native output");
+        main(() -> playbackAudioFocus().acquire());
+        awaitProgress(CHANNELS[0][1], 2);
+        complete();
+        audioFocusTransitions(true);
+    }
+
+    private void audioFocusBasic() throws Exception {
+        // Focus/API compatibility only: the API 19 emulator does not decode the live AVC profile.
+        for (int index = 0; index < 3; index++) {
+            begin("focus-only-reopen-" + index);
+            waitCondition(() -> playbackAudioFocus().hasFocus(), 5000, "legacy startup did not acquire focus");
+            main(() -> NativeBridge.pause(session()));
+            complete();
+            if (index < 2) {
+                MainActivity old = activity;
+                PlaybackAudioFocus focus = playbackAudioFocus();
+                main(old::finish);
+                waitCondition(old::isDestroyed, 10000, "legacy Activity did not finish");
+                require(!focus.hasFocus() && !focus.hasRequest(), "legacy Activity retained focus after finish");
+                launch();
+            }
+        }
+        audioFocusTransitions(false);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void audioFocusTransitions(boolean live) throws Exception {
+        begin("surface-recreation-while-waiting-for-audio-focus");
+        android.media.AudioManager manager = (android.media.AudioManager) activity.getSystemService(Activity.AUDIO_SERVICE);
+        android.media.AudioManager.OnAudioFocusChangeListener competing = change -> { };
+        try {
+            main(() -> require(manager.requestAudioFocus(competing, android.media.AudioManager.STREAM_MUSIC,
+                    android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED,
+                    "transient focus request was denied"));
+            waitCondition(() -> !playbackAudioFocus().hasFocus(), 5000, "transient focus loss was not delivered");
+            main(() -> playbackAudioFocus().acquire());
+            require(!playbackAudioFocus().hasFocus() && playbackAudioFocus().hasRequest(),
+                    "ordinary acquisition stole transient focus");
+            long old = session();
+            main(() -> viewField("surface").setVisibility(View.GONE));
+            waitCondition(() -> session() == 0, 5000, "focus test Surface did not release its session");
+            main(() -> viewField("surface").setVisibility(View.VISIBLE));
+            waitCondition(() -> session() != 0 && session() != old && "paused".equals(status().optString("state")),
+                    10000, "Surface recreation played before regaining focus");
+            require(!playbackAudioFocus().hasFocus() && playbackAudioFocus().hasRequest(),
+                    "automatic Surface selection stole transient focus");
+            main(() -> manager.abandonAudioFocus(competing));
+            waitCondition(() -> playbackAudioFocus().hasFocus(), 5000, "transient focus was not restored");
+            if (live) awaitProgress(selectedPid(), 2);
+            else main(() -> NativeBridge.pause(session()));
+            complete();
+
+            begin("permanent-audio-focus-loss-and-explicit-recovery");
+            java.lang.reflect.Field listenerField = PlaybackAudioFocus.class.getDeclaredField("listener");
+            listenerField.setAccessible(true);
+            android.media.AudioManager.OnAudioFocusChangeListener stale =
+                    (android.media.AudioManager.OnAudioFocusChangeListener) listenerField.get(playbackAudioFocus());
+            main(() -> require(manager.requestAudioFocus(competing, android.media.AudioManager.STREAM_MUSIC,
+                    android.media.AudioManager.AUDIOFOCUS_GAIN) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED,
+                    "permanent competing focus request was denied"));
+            waitCondition(() -> !playbackAudioFocus().hasFocus() && !playbackAudioFocus().hasRequest()
+                            && "paused".equals(status().optString("state")),
+                    5000, "permanent focus loss did not clear its request and pause native output");
+            main(() -> {
+                manager.abandonAudioFocus(competing);
+                stale.onAudioFocusChange(android.media.AudioManager.AUDIOFOCUS_GAIN);
+            });
+            waitForIdleSync();
+            require(!playbackAudioFocus().hasFocus(), "old gain callback revived permanently lost focus");
+            main(() -> playbackAudioFocus().acquireForPlayback());
+            waitCondition(() -> playbackAudioFocus().hasFocus(), 5000, "explicit playback did not regain focus");
+            if (live) awaitProgress(selectedPid(), 2);
+            else main(() -> NativeBridge.pause(session()));
+            complete();
+        } finally {
+            main(() -> manager.abandonAudioFocus(competing));
         }
     }
 
