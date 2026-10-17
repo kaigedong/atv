@@ -37,6 +37,8 @@ pub struct Status {
     pub audio_nonzero_samples: u64,
     pub audio_peak: f64,
     pub audio_rms: f64,
+    /// Automatic reacquisitions since explicit channel selection, excluding initial startup.
+    pub reconnect_attempts: u64,
     pub error_code: &'static str,
     pub message: &'static str,
     pub buffers: BufferStats,
@@ -73,6 +75,7 @@ impl Default for Status {
             audio_nonzero_samples: 0,
             audio_peak: 0.0,
             audio_rms: 0.0,
+            reconnect_attempts: 0,
             error_code: "",
             message: "",
             buffers: BufferStats::default(),
@@ -135,6 +138,14 @@ pub enum PlaybackError {
     Cancelled,
     #[error("live stream stalled")]
     Stalled,
+}
+impl PlaybackError {
+    pub fn retryable(&self) -> bool {
+        matches!(
+            self,
+            Self::Network | Self::Playlist | Self::Media | Self::Codec | Self::Stalled
+        )
+    }
 }
 impl From<HttpError> for PlaybackError {
     fn from(error: HttpError) -> Self {
@@ -656,6 +667,18 @@ mod tests {
             send(&tx, &cancel, Event::Failed(PlaybackError::Network)),
             Err(PlaybackError::Cancelled)
         ));
+    }
+    #[test]
+    fn reconnect_attempts_are_serialized_as_cumulative_camel_case_counter() {
+        let mut status = Status::loading("1".into());
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["reconnectAttempts"], 0);
+        status.reconnect_attempts = 7;
+        status.fail(&PlaybackError::Network);
+        assert_eq!(
+            serde_json::to_value(&status).unwrap()["reconnectAttempts"],
+            7
+        );
     }
     #[test]
     fn error_status_contains_no_raw_protocol_details() {

@@ -169,3 +169,36 @@ ATV_TEST_DEVICE=emulator-5574 ATV_TEST_MODE=overlays-basic ./scripts/android-run
 ```
 
 本地报告与截图在忽略目录 `test-artifacts/overlays/`；未发布广播截图或设备运行记录。
+
+## 当前方向导航与自动恢复
+
+频道列表右键依次从央视到卫视、再进入设置；设置左键返回卫视，卫视左键返回央视。
+从设置返回时在弹窗关闭后恢复频道焦点与滚动位置，浏览不改变正在播放的频道。
+
+共享 Rust 播放核心对网络、列表、媒体、输出设备和无进展故障自动重新获取当前频道，
+保留清晰度。首次输出等待上限为 20 秒，音视频单轨无进展检测仍为 12 秒。
+重连间隔为 1、2、4、8、15 秒并保持 15 秒上限；连续正常播放 20 秒后重置退避。
+暂停、选台、停止和销毁取消旧重连。权限拒绝、试看结束及未支持的格式/验证保持终止错误。
+恢复等待阶段为 loading，UI 不显示手动重试按钮；分类诊断在设置中保留，开始新尝试时清除。
+状态新增 reconnectAttempts，表示显式选台以来实际发起的自动重连次数，等待计时不会累加。
+
+27 项播放核心单元测试覆盖精确退避、首帧前失败、启动超时、输出超时、稳定播放、
+暂停/切台/销毁取消、清晰度、权限/试看结束和线程容量。模拟时钟测试不冒充真实网络验证。
+
+以下运行模式分别检查真实遥控器导航、启动前断网与播放中断网恢复；无线断网测试应选择
+有 Wi-Fi/移动网络的开发模拟器，有线连接的 TV 模拟器关闭 Wi-Fi 不代表网络中断。
+network/startup-network 会在 finally 中恢复原来的无线设置，恢复后不点击重试或发送恢复指令，
+直接等待原频道双轨推进，并检查正常播放不继续重连。普通 smoke/all 不修改网络设置。
+
+```sh
+ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=groups ./scripts/android-runtime-check.sh
+ATV_TEST_DEVICE=emulator-5570 ATV_TEST_MODE=startup-network ./scripts/android-runtime-check.sh
+ATV_TEST_DEVICE=emulator-5570 ATV_TEST_MODE=network ./scripts/android-runtime-check.sh
+```
+
+当前版本已通过 TV 模拟器 groups 导航与 feedback 加载反馈验证；无线 Android 模拟器的
+network、startup-network、lifecycle 和 retry 模式均通过。两种断网场景都记录到 2 次自动重连，
+恢复后没有用户操作，原 session/频道继续输出音视频，随后约 8 秒推进中没有额外重连；
+退出后 render/network 线程归零。启动卡死 20 秒和单轨停滞 12 秒的精确边界由模拟时钟单元测试验证。
+
+本地运行结果保存在忽略目录 test-artifacts/native/auto-recovery/；未发布广播画面、鉴权数据或设备身份。

@@ -311,7 +311,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if ("error".equals(phase)) {
             showError(state.optString("message", getString(R.string.native_failure)));
         } else {
-            playbackError = "";
+            playbackError = state.optString("errorCode").isEmpty() ? "" : state.optString("message");
             // Network/audio state can briefly say loading while decoded video keeps advancing.
             boolean recentVideo = lastVideoProgressAt > 0 && now - lastVideoProgressAt < 2500;
             boolean playing = "playing".equals(phase) && videoWidth > 0 && videoHeight > 0;
@@ -375,8 +375,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (!fullscreen && channelRows.hasFocus()
                 && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
-                if (key == KeyEvent.KEYCODE_DPAD_RIGHT && "yangshi".equals(group)) setGroup("weishi");
-                else if (key == KeyEvent.KEYCODE_DPAD_LEFT && "weishi".equals(group)) setGroup("yangshi");
+                if (key == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    if ("yangshi".equals(group)) setGroup("weishi");
+                    else if ("weishi".equals(group)) openSettings();
+                } else if ("weishi".equals(group)) setGroup("yangshi");
             }
             return true;
         }
@@ -482,6 +484,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (settingsDialog != null && settingsDialog.isShowing()) return;
         final View previousFocus = getCurrentFocus();
         final boolean restoreChannels = !fullscreen;
+        final boolean[] returnToSatellites = {false};
         setFullscreen(true);
         settingsDialog = new Dialog(this);
         settingsDialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
@@ -520,6 +523,13 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         scroll.addView(content);
         settingsDialog.setContentView(scroll);
         settingsDialog.setOnKeyListener((dialog, key, event) -> {
+            if (key == KeyEvent.KEYCODE_DPAD_LEFT) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    returnToSatellites[0] = true;
+                    dialog.dismiss();
+                }
+                return true;
+            }
             if ((key == KeyEvent.KEYCODE_MENU || key == KeyEvent.KEYCODE_SETTINGS) && event.getAction() == KeyEvent.ACTION_DOWN) {
                 dialog.dismiss(); return true;
             }
@@ -529,8 +539,13 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             settingsDialog = null;
             qualitySummary = updateSummary = null;
             qualityButton = updateCheck = updateDownload = updateInstall = updateCancel = null;
-            if (restoreChannels && !isFinishing() && !isDestroyed()) setFullscreen(false, false);
-            if (previousFocus != null && previousFocus.isShown()) previousFocus.requestFocus();
+            if (!isFinishing() && !isDestroyed()) {
+                if (restoreChannels || returnToSatellites[0]) setFullscreen(false, false);
+                if (returnToSatellites[0] && !"weishi".equals(group)) setGroup("weishi");
+                else if (previousFocus != null && previousFocus.isShown()
+                        && (!returnToSatellites[0] || previousFocus.getParent() == channelRows)) previousFocus.requestFocus();
+                else if (returnToSatellites[0]) focusGroup();
+            }
             hideSystemBars();
         });
         settingsDialog.show();

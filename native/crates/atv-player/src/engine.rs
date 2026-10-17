@@ -86,6 +86,9 @@ pub struct Player<F: OutputFactory> {
     paused: bool,
     run: Option<Run>,
     pending_start: bool,
+    reconnect_at: Option<Instant>,
+    failure_streak: u32,
+    playing_since: Option<Instant>,
     count: Arc<AtomicUsize>,
     status: Status,
     quality: Quality,
@@ -99,6 +102,9 @@ impl<F: OutputFactory> Player<F> {
             paused: false,
             run: None,
             pending_start: false,
+            reconnect_at: None,
+            failure_streak: 0,
+            playing_since: None,
             count: NETWORK_COUNT
                 .get_or_init(|| Arc::new(AtomicUsize::new(0)))
                 .clone(),
@@ -109,6 +115,9 @@ impl<F: OutputFactory> Player<F> {
     pub fn select(&mut self, pid: String, stream_id: String) -> Result<(), ControlError> {
         validate_channel(&pid, &stream_id)?;
         self.run.take();
+        self.reconnect_at = None;
+        self.failure_streak = 0;
+        self.playing_since = None;
         self.status = Status::loading(pid.clone());
         self.status.requested_quality = self.quality.id();
         if self.paused {
@@ -122,7 +131,11 @@ impl<F: OutputFactory> Player<F> {
         if self.quality != quality {
             self.quality = quality;
             if let Some((pid, stream)) = self.selected.clone() {
+                let attempts = self.status.reconnect_attempts;
+                let streak = self.failure_streak;
                 let _ = self.select(pid, stream);
+                self.status.reconnect_attempts = attempts;
+                self.failure_streak = streak;
             }
             self.status.requested_quality = quality.id();
         }
@@ -130,6 +143,8 @@ impl<F: OutputFactory> Player<F> {
     pub fn pause(&mut self) {
         self.paused = true;
         self.pending_start = false;
+        self.reconnect_at = None;
+        self.playing_since = None;
         self.run.take();
         self.status.state = "paused";
         self.status.buffers = BufferStats::default();
@@ -139,7 +154,9 @@ impl<F: OutputFactory> Player<F> {
             self.paused = false;
             self.pending_start = self.selected.is_some();
             if let Some((pid, _)) = &self.selected {
+                let attempts = self.status.reconnect_attempts;
                 self.status = Status::loading(pid.clone());
+                self.status.reconnect_attempts = attempts;
                 self.status.requested_quality = self.quality.id();
             }
         }
@@ -147,6 +164,9 @@ impl<F: OutputFactory> Player<F> {
     pub fn stop(&mut self) {
         self.run.take();
         self.selected = None;
+        self.reconnect_at = None;
+        self.failure_streak = 0;
+        self.playing_since = None;
         self.pending_start = false;
         self.paused = false;
         self.status = Status::default();
@@ -155,32 +175,69 @@ impl<F: OutputFactory> Player<F> {
         &self.status
     }
     pub fn tick(&mut self) {
-        if self.pending_start
+        self.tick_at(Instant::now());
+    }
+    fn tick_at(&mut self, now: Instant) {
+        // A deadline never blocks the renderer or holds a network worker slot.
+        if !self.paused
+            && (self.pending_start || self.reconnect_at.is_some_and(|due| now >= due))
             && let Some(guard) = WorkerCount::try_acquire(&self.count)
         {
             self.pending_start = false;
-            if let Some((pid, stream_id)) = &self.selected {
+            let reconnect = self.reconnect_at.take().is_some();
+            if let Some((pid, stream_id)) = self.selected.clone() {
+                let attempts = self
+                    .status
+                    .reconnect_attempts
+                    .saturating_add(u64::from(reconnect));
+                self.status = Status::loading(pid.clone());
+                self.status.requested_quality = self.quality.id();
+                self.status.reconnect_attempts = attempts;
                 match Run::new(
                     self.source.clone(),
-                    pid.clone(),
-                    stream_id.clone(),
+                    pid,
+                    stream_id,
                     self.quality,
                     guard,
+                    now,
                 ) {
                     Ok(run) => self.run = Some(run),
-                    Err(error) => self.status.fail(&error),
+                    Err(error) => self.failed(error, now),
                 }
             }
         }
         if let Some(active) = &mut self.run {
-            match active.advance(&mut self.factory) {
-                Ok(()) => active.publish(&mut self.status),
-                Err(error) => {
-                    active.publish(&mut self.status);
-                    self.status.fail(&error);
-                    self.run.take();
+            let result = active.advance(&mut self.factory, now);
+            active.publish(&mut self.status, now);
+            match result {
+                Ok(()) => {
+                    if self.status.state == "playing" {
+                        self.status.error_code = "";
+                        self.status.message = "";
+                        let since = self.playing_since.get_or_insert(now);
+                        if now.saturating_duration_since(*since) >= Duration::from_secs(20) {
+                            self.failure_streak = 0;
+                        }
+                    } else {
+                        self.playing_since = None;
+                    }
                 }
+                Err(error) => self.failed(error, now),
             }
+        }
+    }
+    fn failed(&mut self, error: PlaybackError, now: Instant) {
+        self.run.take();
+        self.playing_since = None;
+        self.status.fail(&error);
+        if error.retryable() && self.selected.is_some() && !self.paused {
+            self.failure_streak = self.failure_streak.saturating_add(1);
+            self.reconnect_at = Some(now + reconnect_delay(self.failure_streak));
+            // Keep categorized diagnostics while recovery is waiting, without exposing
+            // the terminal-error UI. Each attempt reacquires fresh permission/URLs.
+            self.status.state = "loading";
+        } else {
+            self.reconnect_at = None;
         }
     }
 }
@@ -189,6 +246,10 @@ impl<F: OutputFactory> Drop for Player<F> {
         // Outputs must be destroyed before factory-owned windows/devices.
         self.run.take();
     }
+}
+
+fn reconnect_delay(streak: u32) -> Duration {
+    Duration::from_secs((1u64 << streak.saturating_sub(1).min(4)).min(15))
 }
 
 enum Command {
@@ -311,6 +372,7 @@ struct Run {
     expires_unix_seconds: Option<u64>,
     first_output: Option<Instant>,
     output_started: Instant,
+    started: Instant,
     last_video: Option<Instant>,
     last_audio: Option<Instant>,
     last_progress: Instant,
@@ -326,6 +388,7 @@ impl Run {
         stream_id: String,
         quality: Quality,
         guard: WorkerCount,
+        now: Instant,
     ) -> Result<Self, PlaybackError> {
         let cancel = Cancellation::default();
         let worker_cancel = cancel.clone();
@@ -351,29 +414,34 @@ impl Run {
             preview_seconds: 0,
             expires_unix_seconds: None,
             first_output: None,
-            output_started: Instant::now(),
+            output_started: now,
+            started: now,
             last_video: None,
             last_audio: None,
-            last_progress: Instant::now(),
+            last_progress: now,
             stats: OutputStats::default(),
             video_base: 0,
             audio_base: 0,
             position_base: 0,
         })
     }
-    fn reset_output(&mut self, factory: &mut impl OutputFactory) -> Result<(), PlaybackError> {
+    fn reset_output(
+        &mut self,
+        factory: &mut impl OutputFactory,
+        now: Instant,
+    ) -> Result<(), PlaybackError> {
         self.video_base = self.stats.video_frames;
         self.audio_base = self.stats.audio_frames;
         self.position_base = self.stats.position_us;
         self.output.take();
         self.last_video = None;
         self.last_audio = None;
-        self.output_started = Instant::now();
+        self.output_started = now;
         self.processor = Some(MediaProcessor::new(self.initial_url.clone()));
         self.output = Some(factory.create().map_err(|_| PlaybackError::Codec)?);
         Ok(())
     }
-    fn drain(&mut self) -> Result<(), PlaybackError> {
+    fn drain(&mut self, now: Instant) -> Result<(), PlaybackError> {
         let Some(output) = &mut self.output else {
             return Ok(());
         };
@@ -381,7 +449,6 @@ impl Run {
         stats.video_frames += self.video_base;
         stats.audio_frames += self.audio_base;
         stats.position_us += self.position_base;
-        let now = Instant::now();
         if stats.video_frames > self.stats.video_frames {
             self.last_video = Some(now);
             self.first_output.get_or_insert(now);
@@ -395,7 +462,11 @@ impl Run {
         self.stats = stats;
         Ok(())
     }
-    fn advance(&mut self, factory: &mut impl OutputFactory) -> Result<(), PlaybackError> {
+    fn advance(
+        &mut self,
+        factory: &mut impl OutputFactory,
+        now: Instant,
+    ) -> Result<(), PlaybackError> {
         if self.expires_unix_seconds.is_some_and(|end| {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -405,7 +476,7 @@ impl Run {
         }) {
             return Err(PlaybackError::PreviewEnded);
         }
-        self.drain()?;
+        self.drain(now)?;
         // Keep the two-event network jitter buffer, but only transform short
         // batches of the active fragment as the output accepts more input.
         if self.packets.is_empty() && self.fragment.is_none() {
@@ -428,14 +499,14 @@ impl Run {
                     self.initial_url = initial_url;
                     self.preview_seconds = preview_seconds;
                     self.expires_unix_seconds = expires_unix_seconds;
-                    self.reset_output(factory)?;
+                    self.reset_output(factory, now)?;
                 }
                 Ok(Event::Fragment {
                     bytes,
                     discontinuity,
                 }) => {
                     if discontinuity {
-                        self.reset_output(factory)?;
+                        self.reset_output(factory, now)?;
                     }
                     self.fragment = Some(MediaFragment::new(bytes)?);
                 }
@@ -472,26 +543,29 @@ impl Run {
                 Err(_) => return Err(PlaybackError::Codec),
             }
         }
-        self.drain()?;
+        self.drain(now)?;
         self.measure_buffers();
         if self.preview_seconds > 0
-            && self
-                .first_output
-                .is_some_and(|start| start.elapsed().as_secs() >= self.preview_seconds)
+            && self.first_output.is_some_and(|start| {
+                now.saturating_duration_since(start).as_secs() >= self.preview_seconds
+            })
         {
             return Err(PlaybackError::PreviewEnded);
         }
-        if self.last_progress.elapsed() > Duration::from_secs(45) {
+        if (self.first_output.is_none()
+            && now.saturating_duration_since(self.started) >= Duration::from_secs(20))
+            || now.saturating_duration_since(self.last_progress) >= Duration::from_secs(45)
+        {
             return Err(PlaybackError::Stalled);
         }
         if self.output.is_some()
-            && self.output_started.elapsed() > Duration::from_secs(12)
+            && now.saturating_duration_since(self.output_started) >= Duration::from_secs(12)
             && (self
                 .last_video
-                .is_none_or(|last| last.elapsed() > Duration::from_secs(12))
-                || self
-                    .last_audio
-                    .is_none_or(|last| last.elapsed() > Duration::from_secs(12)))
+                .is_none_or(|last| now.saturating_duration_since(last) >= Duration::from_secs(12))
+                || self.last_audio.is_none_or(|last| {
+                    now.saturating_duration_since(last) >= Duration::from_secs(12)
+                }))
         {
             return Err(PlaybackError::Stalled);
         }
@@ -522,7 +596,7 @@ impl Run {
             render_peak_capacity_bytes: self.buffers.render_peak_capacity_bytes.max(total),
         };
     }
-    fn publish(&self, status: &mut Status) {
+    fn publish(&self, status: &mut Status, now: Instant) {
         status.effective_quality = self.effective_quality;
         status
             .available_qualities
@@ -542,8 +616,9 @@ impl Run {
         status.video_width = self.stats.width;
         status.video_height = self.stats.height;
         status.position_ms = (self.stats.position_us.max(0) / 1000) as u64;
-        let recent =
-            |last: Option<Instant>| last.is_some_and(|t| t.elapsed() < Duration::from_secs(3));
+        let recent = |last: Option<Instant>| {
+            last.is_some_and(|t| now.saturating_duration_since(t) < Duration::from_secs(3))
+        };
         status.state = if recent(self.last_video) && recent(self.last_audio) {
             "playing"
         } else {
@@ -566,7 +641,7 @@ mod tests {
     // are never used as evidence of real network/video/audio playback.
     use super::*;
     use atv_media::OutputError;
-    use std::{cell::RefCell, rc::Rc};
+    use std::{cell::RefCell, rc::Rc, sync::atomic::AtomicBool};
     static SERIAL: Mutex<()> = Mutex::new(());
 
     #[derive(Default)]
@@ -575,6 +650,10 @@ mod tests {
         maximum: AtomicUsize,
         calls: AtomicUsize,
         qualities: Mutex<Vec<Quality>>,
+        channels: Mutex<Vec<(String, String)>>,
+        failures: Mutex<VecDeque<PlaybackError>>,
+        events: Mutex<Option<mpsc::SyncSender<Event>>>,
+        hold_resolution: AtomicBool,
     }
     impl LiveSource for Source {
         fn acquire_quality(
@@ -586,6 +665,10 @@ mod tests {
             events: &mpsc::SyncSender<Event>,
         ) {
             self.qualities.lock().unwrap().push(quality);
+            self.channels
+                .lock()
+                .unwrap()
+                .push((pid.into(), stream.into()));
             self.acquire(pid, stream, cancel, events);
         }
         fn acquire(
@@ -598,6 +681,19 @@ mod tests {
             let active = self.active.fetch_add(1, Ordering::SeqCst) + 1;
             self.maximum.fetch_max(active, Ordering::SeqCst);
             self.calls.fetch_add(1, Ordering::SeqCst);
+            *self.events.lock().unwrap() = Some(events.clone());
+            if let Some(error) = self.failures.lock().unwrap().pop_front() {
+                let _ = events.send(Event::Failed(error));
+                self.active.fetch_sub(1, Ordering::SeqCst);
+                return;
+            }
+            while self.hold_resolution.load(Ordering::SeqCst) && !cancel.cancelled() {
+                thread::sleep(Duration::from_millis(1));
+            }
+            if cancel.cancelled() {
+                self.active.fetch_sub(1, Ordering::SeqCst);
+                return;
+            }
             let _ = events.send(Event::Resolved {
                 initial_url: "https://fixture.invalid/".into(),
                 preview_seconds: 0,
@@ -643,6 +739,8 @@ mod tests {
             if self.fail {
                 return Err(OutputError::Unsupported("scripted failure"));
             }
+            self.stats.width = 1920;
+            self.stats.height = 1080;
             self.stats.video_frames += 1;
             if self.audio {
                 self.stats.audio_frames += 1024;
@@ -682,6 +780,381 @@ mod tests {
             outputs,
         )
     }
+    fn inject_failure(source: &Source, error: PlaybackError) {
+        source
+            .events
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .send(Event::Failed(error))
+            .unwrap();
+    }
+    fn playing_at(player: &mut Player<Factory>, now: Instant) {
+        wait(|| {
+            player.tick_at(now);
+            player.status().state == "playing"
+        });
+    }
+    fn recovering_at(player: &mut Player<Factory>, now: Instant) {
+        wait(|| {
+            player.tick_at(now);
+            player.reconnect_at.is_some()
+        });
+        assert_eq!(player.status().state, "loading");
+    }
+    fn stopped(player: &mut Player<Factory>, source: &Source) {
+        player.stop();
+        wait(|| source.active.load(Ordering::SeqCst) == 0);
+    }
+
+    #[test]
+    fn failure_before_first_frame_recovers_same_channel_and_quality() {
+        let _serial = SERIAL.lock().unwrap();
+        for error in [
+            PlaybackError::Network,
+            PlaybackError::Playlist,
+            PlaybackError::Media,
+            PlaybackError::Codec,
+            PlaybackError::Stalled,
+        ] {
+            let (mut player, source, outputs) = fixture(true, false);
+            source.failures.lock().unwrap().push_back(error);
+            player.set_quality(Quality::Shd);
+            player.select("1".into(), "2".into()).unwrap();
+            let now = Instant::now();
+            recovering_at(&mut player, now);
+            assert_eq!(player.status().video_frames, 0);
+            assert_eq!(*outputs.borrow(), 0);
+            assert_eq!(player.status().reconnect_attempts, 0);
+            assert!(!player.status().error_code.is_empty());
+            player.tick_at(now + Duration::from_millis(999));
+            assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+            playing_at(&mut player, now + Duration::from_secs(1));
+            assert_eq!(player.status().reconnect_attempts, 1);
+            assert!(player.status().video_frames > 0);
+            assert_eq!(player.status().error_code, "");
+            assert_eq!(player.status().message, "");
+            assert_eq!(player.status().requested_quality, "shd");
+            assert_eq!(
+                *source.channels.lock().unwrap(),
+                [("1".into(), "2".into()), ("1".into(), "2".into())]
+            );
+            assert_eq!(
+                *source.qualities.lock().unwrap(),
+                [Quality::Shd, Quality::Shd]
+            );
+            stopped(&mut player, &source);
+        }
+    }
+    #[test]
+    fn reconnect_backoff_uses_deadlines_and_caps_at_fifteen_seconds() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        source
+            .failures
+            .lock()
+            .unwrap()
+            .extend((0..8).map(|_| PlaybackError::Network));
+        player.select("1".into(), "2".into()).unwrap();
+        let mut now = Instant::now();
+        for (index, delay) in [1, 2, 4, 8, 15, 15, 15].into_iter().enumerate() {
+            recovering_at(&mut player, now);
+            let due = now + Duration::from_secs(delay);
+            assert_eq!(player.reconnect_at, Some(due));
+            assert_eq!(player.status().reconnect_attempts, index as u64);
+            assert_eq!(source.calls.load(Ordering::SeqCst), index + 1);
+            for _ in 0..10 {
+                player.tick_at(due - Duration::from_millis(1));
+            }
+            assert_eq!(source.calls.load(Ordering::SeqCst), index + 1);
+            now = due;
+            wait(|| {
+                player.tick_at(now);
+                player.failure_streak == index as u32 + 2
+            });
+        }
+        assert_eq!(reconnect_delay(u32::MAX), Duration::from_secs(15));
+        stopped(&mut player, &source);
+    }
+    #[test]
+    fn successful_first_frames_do_not_reset_backoff_until_twenty_seconds_playing() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        source
+            .failures
+            .lock()
+            .unwrap()
+            .push_back(PlaybackError::Network);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        recovering_at(&mut player, now);
+        let first = now + Duration::from_secs(1);
+        playing_at(&mut player, first);
+        for second in 1..20 {
+            player.tick_at(first + Duration::from_secs(second));
+            assert_eq!(player.failure_streak, 1);
+        }
+        inject_failure(&source, PlaybackError::Network);
+        player.tick_at(first + Duration::from_secs(19));
+        assert_eq!(player.failure_streak, 2);
+        let second = first + Duration::from_secs(21);
+        assert_eq!(player.reconnect_at, Some(second));
+        playing_at(&mut player, second);
+        for elapsed in 1..=20 {
+            player.tick_at(second + Duration::from_secs(elapsed));
+        }
+        assert_eq!(player.failure_streak, 0);
+        assert_eq!(player.status().reconnect_attempts, 2);
+        let failure = second + Duration::from_secs(21);
+        inject_failure(&source, PlaybackError::Codec);
+        player.tick_at(failure);
+        assert_eq!(player.reconnect_at, Some(failure + Duration::from_secs(1)));
+        stopped(&mut player, &source);
+    }
+    #[test]
+    fn smooth_playback_never_restarts_or_increments_reconnect_count() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        playing_at(&mut player, now);
+        for second in 1..=120 {
+            player.tick_at(now + Duration::from_secs(second));
+            assert_eq!(player.status().state, "playing");
+            assert!(player.reconnect_at.is_none());
+            assert_eq!(player.status().reconnect_attempts, 0);
+        }
+        assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+        stopped(&mut player, &source);
+    }
+    #[test]
+    fn startup_without_output_times_out_at_twenty_seconds_and_recovers() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        source.hold_resolution.store(true, Ordering::SeqCst);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        player.tick_at(now);
+        wait(|| source.calls.load(Ordering::SeqCst) == 1);
+        player.tick_at(now + Duration::from_millis(19_999));
+        assert!(player.reconnect_at.is_none());
+        player.tick_at(now + Duration::from_secs(20));
+        assert_eq!(player.status().error_code, "stalled");
+        assert_eq!(player.status().state, "loading");
+        assert_eq!(player.reconnect_at, Some(now + Duration::from_secs(21)));
+        assert_eq!(player.status().video_frames, 0);
+        source.hold_resolution.store(false, Ordering::SeqCst);
+        playing_at(&mut player, now + Duration::from_secs(21));
+        assert_eq!(player.status().reconnect_attempts, 1);
+        stopped(&mut player, &source);
+    }
+    #[test]
+    fn uninterrupted_video_with_missing_audio_recovers_after_output_timeout() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(false, false);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        wait(|| {
+            player.tick_at(now);
+            player.status().video_frames > 0
+        });
+        player.tick_at(now + Duration::from_millis(11_999));
+        assert!(player.reconnect_at.is_none());
+        player.tick_at(now + Duration::from_secs(12));
+        assert_eq!(player.status().state, "loading");
+        assert_eq!(player.status().error_code, "stalled");
+        assert_eq!(player.reconnect_at, Some(now + Duration::from_secs(13)));
+        player.factory.audio = true;
+        playing_at(&mut player, now + Duration::from_secs(13));
+        assert_eq!(player.status().reconnect_attempts, 1);
+        assert_eq!(source.calls.load(Ordering::SeqCst), 2);
+        stopped(&mut player, &source);
+    }
+    #[test]
+    fn elapsed_preview_deadline_is_terminal_even_with_advancing_frames() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        playing_at(&mut player, now);
+        player.run.as_mut().unwrap().preview_seconds = 5;
+        player.tick_at(now + Duration::from_secs(5));
+        assert_eq!(player.status().state, "error");
+        assert_eq!(player.status().error_code, "preview");
+        assert!(player.reconnect_at.is_none());
+        player.tick_at(now + Duration::from_secs(60));
+        assert_eq!(player.status().reconnect_attempts, 0);
+        assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+        stopped(&mut player, &source);
+    }
+    #[test]
+    fn output_failure_releases_devices_then_automatically_reopens_them() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, outputs) = fixture(true, true);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        recovering_at(&mut player, now);
+        assert_eq!(player.status().error_code, "codec");
+        assert_eq!(*outputs.borrow(), 0);
+        player.factory.fail = false;
+        playing_at(&mut player, now + Duration::from_secs(1));
+        assert_eq!(*outputs.borrow(), 1);
+        assert_eq!(player.status().reconnect_attempts, 1);
+        stopped(&mut player, &source);
+        assert_eq!(*outputs.borrow(), 0);
+    }
+    #[test]
+    fn pause_stop_select_and_drop_cancel_pending_reconnect() {
+        let _serial = SERIAL.lock().unwrap();
+        for command in ["pause", "stop", "select", "drop"] {
+            let (mut player, source, _) = fixture(true, false);
+            source
+                .failures
+                .lock()
+                .unwrap()
+                .push_back(PlaybackError::Network);
+            player.set_quality(Quality::Shd);
+            player.select("1".into(), "2".into()).unwrap();
+            let now = Instant::now();
+            recovering_at(&mut player, now);
+            let later = now + Duration::from_secs(60);
+            match command {
+                "pause" => {
+                    player.pause();
+                    player.tick_at(later);
+                    assert_eq!(player.status().state, "paused");
+                    assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+                    assert!(player.reconnect_at.is_none());
+                    player.resume();
+                    playing_at(&mut player, later);
+                    assert_eq!(player.status().reconnect_attempts, 0);
+                }
+                "stop" => {
+                    player.stop();
+                    player.tick_at(later);
+                    assert_eq!(player.status().state, "idle");
+                    assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+                    assert!(player.reconnect_at.is_none());
+                }
+                "select" => {
+                    player.select("3".into(), "4".into()).unwrap();
+                    playing_at(&mut player, later);
+                    player.tick_at(later + Duration::from_secs(1));
+                    assert_eq!(source.calls.load(Ordering::SeqCst), 2);
+                    assert_eq!(
+                        source.channels.lock().unwrap().last().unwrap(),
+                        &("3".into(), "4".into())
+                    );
+                    assert_eq!(player.status().pid, "3");
+                    assert_eq!(player.status().reconnect_attempts, 0);
+                }
+                "drop" => {
+                    drop(player);
+                    wait(|| source.active.load(Ordering::SeqCst) == 0);
+                    assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+                    continue;
+                }
+                _ => unreachable!(),
+            }
+            assert!(
+                source
+                    .qualities
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|q| *q == Quality::Shd)
+            );
+            stopped(&mut player, &source);
+        }
+    }
+    #[test]
+    fn reconnect_counter_survives_pause_and_quality_changes_but_resets_on_select() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        source
+            .failures
+            .lock()
+            .unwrap()
+            .push_back(PlaybackError::Network);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        recovering_at(&mut player, now);
+        let now = now + Duration::from_secs(1);
+        playing_at(&mut player, now);
+        assert_eq!(player.status().reconnect_attempts, 1);
+        inject_failure(&source, PlaybackError::Network);
+        player.tick_at(now);
+        player.pause();
+        player.tick_at(now + Duration::from_secs(60));
+        assert_eq!(source.calls.load(Ordering::SeqCst), 2);
+        player.resume();
+        playing_at(&mut player, now + Duration::from_secs(60));
+        assert_eq!(player.status().reconnect_attempts, 1);
+        player.set_quality(Quality::Fhd);
+        playing_at(&mut player, now + Duration::from_secs(61));
+        assert_eq!(player.failure_streak, 2);
+        assert_eq!(player.status().reconnect_attempts, 1);
+        assert_eq!(player.status().requested_quality, "fhd");
+        player.select("3".into(), "4".into()).unwrap();
+        assert_eq!(player.status().reconnect_attempts, 0);
+        stopped(&mut player, &source);
+    }
+    #[test]
+    fn permission_preview_and_unsupported_failures_are_terminal() {
+        let _serial = SERIAL.lock().unwrap();
+        for (error, code) in [
+            (PlaybackError::Authorization, "authorization"),
+            (PlaybackError::PreviewEnded, "preview"),
+            (PlaybackError::Challenge, "challenge"),
+            (PlaybackError::Encryption, "encryption"),
+            (PlaybackError::Cmg, "cmg"),
+            (PlaybackError::Cancelled, "cancelled"),
+        ] {
+            let (mut player, source, _) = fixture(true, false);
+            source.failures.lock().unwrap().push_back(error);
+            player.select("1".into(), "2".into()).unwrap();
+            let now = Instant::now();
+            wait(|| {
+                player.tick_at(now);
+                player.status().state == "error"
+            });
+            player.tick_at(now + Duration::from_secs(60));
+            assert_eq!(player.status().state, "error");
+            assert_eq!(player.status().error_code, code);
+            assert_eq!(player.status().reconnect_attempts, 0);
+            assert!(player.reconnect_at.is_none());
+            assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+            stopped(&mut player, &source);
+        }
+    }
+    #[test]
+    fn scheduled_reconnect_waits_for_shared_worker_capacity() {
+        let _serial = SERIAL.lock().unwrap();
+        let (mut player, source, _) = fixture(true, false);
+        source
+            .failures
+            .lock()
+            .unwrap()
+            .push_back(PlaybackError::Network);
+        player.select("1".into(), "2".into()).unwrap();
+        let now = Instant::now();
+        recovering_at(&mut player, now);
+        wait(|| player.count.load(Ordering::SeqCst) == 0);
+        let first = WorkerCount::try_acquire(&player.count).unwrap();
+        let second = WorkerCount::try_acquire(&player.count).unwrap();
+        player.tick_at(now + Duration::from_secs(1));
+        assert_eq!(player.status().state, "loading");
+        assert_eq!(player.status().reconnect_attempts, 0);
+        assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+        drop(first);
+        playing_at(&mut player, now + Duration::from_secs(1));
+        assert_eq!(player.status().reconnect_attempts, 1);
+        assert_eq!(player.count.load(Ordering::SeqCst), 2);
+        stopped(&mut player, &source);
+        drop(second);
+    }
+
     #[test]
     fn preference_reaches_source_and_survives_pause_resume() {
         let _serial = SERIAL.lock().unwrap();
@@ -750,7 +1223,7 @@ mod tests {
             wait(|| {
                 player.tick();
                 if fail {
-                    player.status().state == "error"
+                    player.status().state == "loading" && player.status().error_code == "codec"
                 } else {
                     player.status().video_frames > 0
                 }
@@ -893,15 +1366,22 @@ mod tests {
         let source = Arc::new(Source::default());
         let count = Arc::new(AtomicUsize::new(0));
         let guard = WorkerCount::try_acquire(&count).unwrap();
-        let mut run =
-            Run::new(source.clone(), "1".into(), "2".into(), Quality::Auto, guard).unwrap();
+        let mut run = Run::new(
+            source.clone(),
+            "1".into(),
+            "2".into(),
+            Quality::Auto,
+            guard,
+            Instant::now(),
+        )
+        .unwrap();
         let mut factory = Factory {
             outputs: Rc::new(RefCell::new(0)),
             audio: true,
             fail: false,
         };
         wait(|| {
-            run.advance(&mut factory).unwrap();
+            run.advance(&mut factory, Instant::now()).unwrap();
             run.output.is_some()
         });
         let attempts = Arc::new(Mutex::new(Vec::new()));
@@ -917,11 +1397,11 @@ mod tests {
             data: vec![1, 2, 3],
         });
         let pointer = run.packets.front().unwrap().data.as_ptr();
-        run.advance(&mut factory).unwrap();
+        run.advance(&mut factory, Instant::now()).unwrap();
         assert_eq!(run.packets.len(), 1);
         assert_eq!(run.packets.front().unwrap().data.as_ptr(), pointer);
         assert!(received.lock().unwrap().is_none());
-        run.advance(&mut factory).unwrap();
+        run.advance(&mut factory, Instant::now()).unwrap();
         assert!(run.packets.is_empty());
         assert_eq!(received.lock().unwrap().as_ref().unwrap().as_ptr(), pointer);
         assert_eq!(*attempts.lock().unwrap(), [vec![1, 2, 3], vec![1, 2, 3]]);

@@ -82,7 +82,8 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "remote": navigationAndFullscreen(); break;
                 case "groups": groupNavigation(); break;
                 case "feedback": playbackFeedback(); break;
-                case "network": network(); break;
+                case "network": network(false); break;
+                case "startup-network": network(true); break;
                 case "component": component(); break;
                 case "settings": settings(false); break;
                 case "settings-basic": settings(true); break;
@@ -188,7 +189,12 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
         assertFirstPageFocus("weishi", cctvPid);
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
-        assertFirstPageFocus("weishi", cctvPid); // The outside edge must retain channel focus.
+        waitCondition(this::settingsFocused, 3000, "satellite RIGHT did not open settings");
+        require(session() == handle && cctvPid.equals(selectedPid()), "settings navigation changed playback");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        waitCondition(() -> !settingsShowing() && !boolField("fullscreen"), 3000, "settings LEFT did not return to satellite channels");
+        waitCondition(this::windowFocused, 3000, "channel window did not regain focus after settings LEFT");
+        assertFirstPageFocus("weishi", cctvPid);
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
         assertPlayingChannelFocus("yangshi", cctvPid);
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
@@ -200,7 +206,7 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
             require(rows.getChildAt(rows.getChildCount() - 1).requestFocus(), "cannot focus deep satellite channel");
         });
         sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
-        waitCondition(this::settingsShowing, 3000, "MENU did not open settings while browsing another group");
+        waitCondition(this::settingsFocused, 3000, "MENU did not open settings while browsing another group");
         sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
         waitCondition(() -> !settingsShowing(), 3000, "BACK did not close settings");
         main(() -> {
@@ -208,6 +214,15 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
             require("weishi".equals(field("group")) && rows.getChildAt(rows.getChildCount() - 1).hasFocus(),
                     "settings return lost the browsed group or deep channel focus");
             require(cctvPid.equals(selectedPid()), "settings changed the playing channel");
+        });
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+        waitCondition(this::settingsFocused, 3000, "deep satellite RIGHT did not open settings");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        waitCondition(() -> !settingsShowing() && !boolField("fullscreen"), 3000, "settings LEFT did not restore deep satellite channel");
+        waitCondition(this::windowFocused, 3000, "deep satellite window did not regain focus");
+        main(() -> {
+            ViewGroup rows = channelRows();
+            require(rows.getChildAt(rows.getChildCount() - 1).hasFocus(), "settings LEFT lost deep satellite focus");
         });
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
         String satellitePid = selectedPid();
@@ -222,7 +237,16 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
         assertPlayingChannelFocus("weishi", satellitePid);
         require(session() == handle, "group browsing recreated playback session");
-        currentStep.put("deepCctvPid", cctvPid).put("deepSatellitePid", satellitePid);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+        waitCondition(this::settingsFocused, 3000, "fullscreen RIGHT did not open settings");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        waitCondition(() -> !settingsShowing() && !boolField("fullscreen"), 3000, "fullscreen settings LEFT did not open satellite channels");
+        waitCondition(this::windowFocused, 3000, "satellite window did not regain focus from fullscreen settings");
+        assertPlayingChannelFocus("weishi", satellitePid);
+        currentStep.put("deepCctvPid", cctvPid).put("deepSatellitePid", satellitePid)
+                .put("satelliteRightOpensSettings", true).put("settingsLeftRestoresSatelliteFocus", true)
+                .put("fullscreenSettingsLeftOpensSatellite", true);
         complete();
     }
 
@@ -251,6 +275,9 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         main(() -> {
             require(group.equals(field("group")) && pid.equals(selectedPid()), "return changed playing channel or group");
             View row = channelRows().findViewWithTag(pid);
+            int check = currentStep.optInt("playingFocusChecks") + 1;
+            currentStep.put("playingFocusChecks", check);
+            recordFocus("playingFocusCheck" + check, row);
             require(row != null && row.hasFocus(), "return did not focus the playing channel");
             Rect visible = new Rect();
             require(row.getLocalVisibleRect(visible) && visible.height() == row.getHeight(), "playing channel is outside the viewport");
@@ -478,6 +505,14 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         android.app.Dialog dialog = (android.app.Dialog) field("settingsDialog");
         return dialog != null && dialog.isShowing();
     }
+    private boolean settingsFocused() throws Exception {
+        AtomicReference<Boolean> focused = new AtomicReference<>(false);
+        main(() -> {
+            android.app.Dialog dialog = (android.app.Dialog) field("settingsDialog");
+            focused.set(dialog != null && dialog.isShowing() && dialog.getWindow().getDecorView().hasWindowFocus());
+        });
+        return focused.get();
+    }
     private void selectQuality(String id, String label) throws Exception {
         main(() -> require(viewField("qualityButton").performClick(), "quality button click failed"));
         main(() -> {
@@ -624,16 +659,18 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
     }
 
     /** Explicit opt-in disruption test; never included in smoke/all modes. */
-    private void network() throws Exception {
-        begin("real-network-loss-and-retry");
+    private void network(boolean startup) throws Exception {
+        begin(startup ? "startup-network-failure-and-automatic-recovery" : "real-network-loss-and-automatic-recovery");
         String fingerprint = Build.FINGERPRINT == null ? "" : Build.FINGERPRINT.toLowerCase(java.util.Locale.ROOT);
         String model = Build.MODEL == null ? "" : Build.MODEL.toLowerCase(java.util.Locale.ROOT);
         boolean emulator = fingerprint.startsWith("generic") || fingerprint.contains("sdk_gphone")
-                || model.contains("emulator") || model.contains("android sdk") || model.contains("sdk_gphone");
+                || model.contains("emulator") || model.contains("android sdk") || model.contains("sdk_gphone")
+                || model.startsWith("sdk_google_atv");
         boolean explicit = "true".equalsIgnoreCase(arguments.getString("allowNetworkChange", "false"));
         require(emulator || explicit, "network disruption requires an emulator or allowNetworkChange=true");
         selectChannel(CHANNELS[0]);
-        awaitProgress(CHANNELS[0][1], 3);
+        if (!startup) awaitProgress(CHANNELS[0][1], 3);
+        long handle = session();
         String wifi = radioSetting("wifi_on"), data = radioSetting("mobile_data");
         require(("0".equals(wifi) || "1".equals(wifi)) && ("0".equals(data) || "1".equals(data)),
                 "radio state cannot be safely restored");
@@ -644,16 +681,23 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
             shell("svc data disable");
             waitCondition(() -> "0".equals(radioSetting("wifi_on")) && "0".equals(radioSetting("mobile_data")),
                     10000, "radios did not disable");
-            waitCondition(() -> "error".equals(status().optString("state")), channelTimeoutMs,
-                    "real network outage did not produce a playback error");
-            JSONObject error = status();
-            String code = error.optString("errorCode");
-            require("network".equals(code) || "stalled".equals(code), "network outage produced an unrelated playback error");
-            currentStep.put("networkLossErrorCode", code);
+            if (startup) selectChannel(CHANNELS[0]);
+            waitCondition(() -> {
+                JSONObject state = status();
+                return state.optLong("reconnectAttempts") > 0
+                        && ("network".equals(state.optString("errorCode")) || "stalled".equals(state.optString("errorCode")));
+            }, channelTimeoutMs, "network outage did not trigger automatic reconnection");
+            JSONObject retrying = status();
+            require("loading".equals(retrying.optString("state")), "automatic retry remained in terminal error state");
+            if (startup) require(retrying.optLong("videoFrames") == 0, "startup failure unexpectedly rendered video");
+            currentStep.put("networkLossErrorCode", retrying.optString("errorCode"))
+                    .put("reconnectAttemptsWhileOffline", retrying.optLong("reconnectAttempts"));
+            waitCondition(() -> viewField("retry").getVisibility() == View.GONE, 3000,
+                    "transient failure still requires a manual retry action");
             snapshot(true);
-            waitCondition(() -> nativeThreads().optInt("network") == 0, 15000,
-                    "failed network worker did not exit");
-            currentStep.put("threadsAfterNetworkLoss", nativeThreads());
+            JSONObject threads = nativeThreads();
+            require(threads.optInt("network") <= 2, "automatic retries exceeded the network worker limit");
+            currentStep.put("threadsAfterNetworkLoss", threads);
         } finally {
             // Both restore operations must be attempted even if the first fails.
             try { shell("svc wifi " + ("1".equals(wifi) ? "enable" : "disable")); }
@@ -662,12 +706,17 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                     15000, "original radio states did not restore");
             currentStep.put("originalRadioStatesRestored", true);
         }
-        waitCondition(() -> viewField("retry").getVisibility() == View.VISIBLE, 3000,
-                "network failure did not expose retry button");
-        // Allow real DHCP and upstream connectivity to recover before one normal UI retry.
-        SystemClock.sleep(5000);
-        main(() -> require(viewField("retry").performClick(), "network retry click was not accepted"));
+        // No click, channel selection, or resume command after restoring connectivity.
         awaitProgress(CHANNELS[0][1], 3);
+        require(session() == handle && CHANNELS[0][1].equals(selectedPid()), "automatic recovery changed channel or native session");
+        waitCondition(() -> viewField("retry").getVisibility() == View.GONE && viewField("loading").getVisibility() == View.GONE,
+                3000, "recovered playback still shows retry or loading feedback");
+        long reconnects = status().optLong("reconnectAttempts");
+        require(reconnects > 0, "recovery did not retain automatic reconnect evidence");
+        awaitProgress(CHANNELS[0][1], 5);
+        require(status().optLong("reconnectAttempts") == reconnects, "healthy playback kept reconnecting");
+        currentStep.put("automaticReconnectAttempts", reconnects).put("recoveredWithoutUserAction", true)
+                .put("healthyPlaybackDoesNotReconnect", true).put("sameNativeSession", true);
         complete();
     }
 
@@ -923,7 +972,7 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
     private void snapshot(boolean force) throws Exception {
         long now = SystemClock.elapsedRealtime(); if (snapshots == null || (!force && now - lastSnapshot < 5000) || snapshots.length() >= 1500) return;
         JSONObject raw = status(), safe = new JSONObject().put("elapsedMs", now);
-        for (String key : new String[]{"state","pid","positionMs","videoWidth","videoHeight","videoFrames","audioFrames","errorCode"}) if (raw.has(key)) safe.put(key, raw.get(key));
+        for (String key : new String[]{"state","pid","positionMs","videoWidth","videoHeight","videoFrames","audioFrames","errorCode","reconnectAttempts"}) if (raw.has(key)) safe.put(key, raw.get(key));
         if (raw.has("buffers")) safe.put("buffers", raw.getJSONObject("buffers"));
         android.os.Debug.MemoryInfo memory = new android.os.Debug.MemoryInfo();
         android.os.Debug.getMemoryInfo(memory);
