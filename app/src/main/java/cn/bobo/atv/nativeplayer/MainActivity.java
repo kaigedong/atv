@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.media.AudioManager;
@@ -25,6 +26,7 @@ import android.view.WindowInsetsController;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -46,10 +48,16 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<Channel> channels = new ArrayList<>();
     private LinearLayout sidebar, channelRows, topbar;
+    private ScrollView channelScroll;
+    private Button cctvGroup, satelliteGroup;
+    private boolean pendingChannelFocus;
     private FrameLayout playerArea;
     private SurfaceView surface;
-    private TextView title, status, hint;
+    private TextView title, hint;
+    private ProgressBar loading;
     private Button retry;
+    private long renderedVideoFrames, lastVideoProgressAt;
+    private String playbackError = "";
     private Channel selected;
     private String group = "yangshi";
     private long session;
@@ -106,18 +114,18 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         surface.setFocusable(false);
         playerArea.addView(surface, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
         playerArea.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob) -> fitSurface());
-        LinearLayout message = new LinearLayout(this);
-        message.setOrientation(LinearLayout.VERTICAL);
-        message.setGravity(Gravity.CENTER);
-        status = text(getString(R.string.no_surface), 20);
-        status.setGravity(Gravity.CENTER);
-        status.setBackgroundColor(Color.argb(180, 12, 13, 16));
-        message.addView(status);
+        loading = new ProgressBar(this);
+        loading.setIndeterminate(true);
+        loading.setFocusable(false);
+        loading.setContentDescription(getString(R.string.loading));
+        loading.getIndeterminateDrawable().mutate().setColorFilter(Color.rgb(104, 224, 191), PorterDuff.Mode.SRC_IN);
+        playerArea.addView(loading, new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.CENTER));
         retry = button(getString(R.string.retry));
         retry.setVisibility(View.GONE);
         retry.setOnClickListener(view -> select(selected));
-        message.addView(retry);
-        playerArea.addView(message, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
+        FrameLayout.LayoutParams retryPosition = new FrameLayout.LayoutParams(dp(144), dp(48), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        retryPosition.bottomMargin = dp(52);
+        playerArea.addView(retry, retryPosition);
 
         topbar = new LinearLayout(this);
         topbar.setGravity(Gravity.CENTER_VERTICAL);
@@ -143,18 +151,27 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         channelPanel.setMargins(dp(16), dp(68), 0, dp(48));
         root.addView(sidebar, channelPanel);
         LinearLayout groups = new LinearLayout(this);
-        Button cctv = button(getString(R.string.cctv));
-        Button satellite = button(getString(R.string.satellite));
-        cctv.setOnClickListener(view -> setGroup("yangshi"));
-        satellite.setOnClickListener(view -> setGroup("weishi"));
-        groups.addView(cctv, new LinearLayout.LayoutParams(0, dp(48), 1));
-        groups.addView(satellite, new LinearLayout.LayoutParams(0, dp(48), 1));
+        cctvGroup = button(getString(R.string.cctv));
+        satelliteGroup = button(getString(R.string.satellite));
+        cctvGroup.setOnClickListener(view -> setGroup("yangshi"));
+        satelliteGroup.setOnClickListener(view -> setGroup("weishi"));
+        // Group headings remain tappable, but remote focus belongs to channels.
+        cctvGroup.setFocusable(false);
+        satelliteGroup.setFocusable(false);
+        groups.addView(cctvGroup, new LinearLayout.LayoutParams(0, dp(48), 1));
+        groups.addView(satelliteGroup, new LinearLayout.LayoutParams(0, dp(48), 1));
         sidebar.addView(groups);
-        ScrollView scroll = new ScrollView(this);
+        channelScroll = new ScrollView(this);
         channelRows = new LinearLayout(this);
         channelRows.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(channelRows);
-        sidebar.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        channelRows.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob) -> {
+            if (pendingChannelFocus) {
+                pendingChannelFocus = false;
+                focusGroup();
+            }
+        });
+        channelScroll.addView(channelRows);
+        sidebar.addView(channelScroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         hint = text(getString(R.string.remote_hint), 12);
         hint.setTextColor(Color.LTGRAY);
@@ -203,7 +220,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
 
     private void setGroup(String next) {
-        group = next; channelRows.removeAllViews();
+        group = next;
+        cctvGroup.setTextColor("yangshi".equals(group) ? Color.rgb(104, 224, 191) : Color.WHITE);
+        satelliteGroup.setTextColor("weishi".equals(group) ? Color.rgb(104, 224, 191) : Color.WHITE);
+        channelRows.removeAllViews();
         for (Channel channel : channels) {
             if (!channel.group.equals(group)) continue;
             Button row = button(channel.name);
@@ -212,13 +232,33 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             row.setOnClickListener(view -> select(channel));
             channelRows.addView(row, new LinearLayout.LayoutParams(-1, dp(48)));
         }
-        focusSelected();
+        channelScroll.scrollTo(0, 0);
+        // Row and viewport heights must be measured before choosing the first page's middle.
+        pendingChannelFocus = true;
+        channelRows.requestLayout();
+    }
+
+    private void focusGroup() {
+        int count = channelRows.getChildCount();
+        if (count == 0 || fullscreen) return;
+        View playing = selected == null ? null : channelRows.findViewWithTag(selected.pid);
+        if (playing != null) {
+            playing.requestFocus();
+            channelScroll.scrollTo(0, Math.max(0, playing.getTop()
+                    - (channelScroll.getHeight() - playing.getHeight()) / 2));
+        } else {
+            int rowHeight = Math.max(1, channelRows.getChildAt(0).getHeight());
+            int visibleRows = Math.min(count, Math.max(1, channelScroll.getHeight() / rowHeight));
+            channelRows.getChildAt(visibleRows / 2).requestFocus();
+            channelScroll.scrollTo(0, 0);
+        }
     }
 
     private void focusSelected() {
         if (selected == null) return;
-        View row = channelRows.findViewWithTag(selected.pid);
-        if (row != null) row.requestFocus();
+        if (!selected.group.equals(group)) setGroup(selected.group);
+        else if (channelRows.isLayoutRequested()) pendingChannelFocus = true;
+        else focusGroup();
     }
 
     private void select(Channel channel) {
@@ -226,9 +266,12 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         selected = channel; title.setText(channel.name);
         getPreferences(MODE_PRIVATE).edit().putString("pid", channel.pid).apply();
         videoWidth = videoHeight = 0;
+        renderedVideoFrames = lastVideoProgressAt = 0;
+        playbackError = "";
+        loading.setVisibility(View.VISIBLE);
+        retry.setVisibility(View.GONE);
         if (!NativeBridge.available()) { showError(getString(R.string.native_unavailable)); return; }
-        if (session == 0) { status.setText(R.string.no_surface); return; }
-        status.setVisibility(View.VISIBLE); status.setText(R.string.loading); retry.setVisibility(View.GONE);
+        if (session == 0) return;
         try { NativeBridge.select(session, channel.pid, channel.streamId); }
         catch (RuntimeException | LinkageError error) { showError(getString(R.string.native_failure)); }
     }
@@ -253,30 +296,37 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     private void showStatus(JSONObject state) {
         lastPlayback = state;
-        refreshSettings();
         if (BuildConfig.DEBUG && SystemClock.elapsedRealtime() - lastStatusLog >= 5000) {
             lastStatusLog = SystemClock.elapsedRealtime();
             Log.i("ATVNative", state.toString());
         }
         videoWidth = state.optInt("videoWidth", 0); videoHeight = state.optInt("videoHeight", 0);
         fitSurface();
+        long now = SystemClock.elapsedRealtime();
+        long frames = state.optLong("videoFrames", 0);
+        if (frames < renderedVideoFrames) lastVideoProgressAt = 0;
+        if (frames > renderedVideoFrames && videoWidth > 0 && videoHeight > 0) lastVideoProgressAt = now;
+        renderedVideoFrames = frames;
         String phase = state.optString("state", "idle");
-        boolean playing = "playing".equals(phase) && videoWidth > 0 && videoHeight > 0;
-        if (playing) {
-            status.setVisibility(View.GONE); retry.setVisibility(View.GONE);
-        } else if ("error".equals(phase)) {
+        if ("error".equals(phase)) {
             showError(state.optString("message", getString(R.string.native_failure)));
         } else {
-            status.setVisibility(View.VISIBLE);
-            setTextChanged(status, getString("paused".equals(phase) ? R.string.paused : R.string.loading));
+            playbackError = "";
+            // Network/audio state can briefly say loading while decoded video keeps advancing.
+            boolean recentVideo = lastVideoProgressAt > 0 && now - lastVideoProgressAt < 2500;
+            boolean playing = "playing".equals(phase) && videoWidth > 0 && videoHeight > 0;
+            loading.setVisibility(!"paused".equals(phase) && !playing && !recentVideo ? View.VISIBLE : View.GONE);
             retry.setVisibility(View.GONE);
+            refreshSettings();
         }
     }
 
     private void showError(String message) {
-        status.setVisibility(View.VISIBLE);
-        setTextChanged(status, message.isEmpty() ? getString(R.string.native_failure) : message);
+        playbackError = message.isEmpty() ? getString(R.string.native_failure) : message;
+        loading.setVisibility(View.GONE);
+        retry.setContentDescription(getString(R.string.retry) + "：" + playbackError);
         retry.setVisibility(View.VISIBLE);
+        refreshSettings();
     }
 
     private void fitSurface() {
@@ -289,11 +339,15 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
 
     private void setFullscreen(boolean value) {
+        setFullscreen(value, true);
+    }
+
+    private void setFullscreen(boolean value, boolean restorePlayingChannel) {
         fullscreen = value;
         sidebar.setVisibility(value ? View.GONE : View.VISIBLE);
         topbar.setVisibility(value ? View.GONE : View.VISIBLE);
         hint.setVisibility(value ? View.GONE : View.VISIBLE);
-        if (!value) focusSelected();
+        if (!value && restorePlayingChannel) focusSelected();
         hideSystemBars();
     }
 
@@ -318,6 +372,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         int key = event.getKeyCode();
+        if (!fullscreen && channelRows.hasFocus()
+                && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                if (key == KeyEvent.KEYCODE_DPAD_RIGHT && "yangshi".equals(group)) setGroup("weishi");
+                else if (key == KeyEvent.KEYCODE_DPAD_LEFT && "weishi".equals(group)) setGroup("yangshi");
+            }
+            return true;
+        }
         if (fullscreen && (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN
                 || key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
                 || key == KeyEvent.KEYCODE_DPAD_CENTER)) {
@@ -434,9 +496,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         qualityButton.setOnClickListener(view -> chooseQuality());
         content.addView(qualityButton, new LinearLayout.LayoutParams(-1, dp(48)));
         content.addView(text("软件更新", 21));
-        content.addView(text("当前版本：" + BuildConfig.VERSION_NAME + "（" + BuildConfig.VERSION_CODE + "）", 16));
-        content.addView(text("每天自动检查一次；下载和安装需手动确认", 14));
-        updateSummary = text("尚未检查更新", 16);
+        content.addView(text("当前版本：" + BuildConfig.VERSION_NAME, 16));
+        content.addView(text(getString(R.string.update_hint), 14));
+        updateSummary = text("尚未检查", 16);
         content.addView(updateSummary);
         updateCheck = button("检查更新");
         updateCheck.setOnClickListener(view -> updateCommand(0));
@@ -467,7 +529,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             settingsDialog = null;
             qualitySummary = updateSummary = null;
             qualityButton = updateCheck = updateDownload = updateInstall = updateCancel = null;
-            if (restoreChannels && !isFinishing() && !isDestroyed()) setFullscreen(false);
+            if (restoreChannels && !isFinishing() && !isDestroyed()) setFullscreen(false, false);
             if (previousFocus != null && previousFocus.isShown()) previousFocus.requestFocus();
             hideSystemBars();
         });
@@ -531,12 +593,27 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         String details = "偏好：" + qualityLabel(preferredQuality) + "\n当前："
                 + (actual.isEmpty() ? "正在获取直播档位" : qualityLabel(actual));
         if (width > 0 && height > 0) details += " · " + width + " × " + height;
+        if (!playbackError.isEmpty()) details += "\n" + playbackError;
         setTextChanged(qualitySummary, details);
         boolean busy = "checking".equals(phase) || "downloading".equals(phase) || "verifying".equals(phase) || "cancelling".equals(phase);
-        String message = updater == 0 ? "更新组件不可用" : lastUpdate.optString("message", "尚未检查更新");
-        if (available || ready || "downloading".equals(phase)) message += "\n新版本：" + lastUpdate.optString("versionName");
-        if ("downloading".equals(phase)) message += String.format(java.util.Locale.ROOT, "\n%.1f / %.1f MiB",
-                lastUpdate.optLong("downloadedBytes") / 1048576.0, lastUpdate.optLong("totalBytes") / 1048576.0);
+        String message;
+        String version = lastUpdate.optString("versionName");
+        switch (phase) {
+            case "checking": message = "检查中…"; break;
+            case "available": message = "新版本：" + version; break;
+            case "ready": message = version + " · 可安装"; break;
+            case "downloading":
+                long total = lastUpdate.optLong("totalBytes");
+                message = total > 0 ? String.format(java.util.Locale.ROOT, "下载中 · %.0f%%",
+                        Math.min(100.0, lastUpdate.optLong("downloadedBytes") * 100.0 / total)) : "下载中…";
+                break;
+            case "verifying": message = "校验中…"; break;
+            case "cancelling": message = "取消中…"; break;
+            case "current": message = "已是最新版本"; break;
+            case "idle": message = "尚未检查"; break;
+            default: message = lastUpdate.optString("message", "尚未检查"); break;
+        }
+        if (updater == 0) message = "更新不可用";
         setTextChanged(updateSummary, message);
         updateCheck.setEnabled(updater != 0 && !busy && !installing);
         updateDownload.setVisibility(available ? View.VISIBLE : View.GONE);

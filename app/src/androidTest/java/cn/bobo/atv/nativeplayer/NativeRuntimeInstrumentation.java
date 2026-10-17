@@ -80,6 +80,8 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "lifecycle": selectChannel(CHANNELS[0]); awaitProgress(CHANNELS[0][1], 3); lifecycle(); break;
                 case "retry": selectChannel(CHANNELS[0]); awaitProgress(CHANNELS[0][1], 3); retry(); break;
                 case "remote": navigationAndFullscreen(); break;
+                case "groups": groupNavigation(); break;
+                case "feedback": playbackFeedback(); break;
                 case "network": network(); break;
                 case "component": component(); break;
                 case "settings": settings(false); break;
@@ -167,6 +169,94 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         lifecycle();
     }
 
+    private void groupNavigation() throws Exception {
+        begin("remote-channel-groups");
+        main(() -> {
+            for (String name : new String[]{"cctv", "satellite"}) {
+                Button heading = findButton(activity.getWindow().getDecorView(), resourceString(name));
+                require(heading != null && !heading.isFocusable(), "group heading accepts remote focus");
+            }
+            findButton(activity.getWindow().getDecorView(), resourceString("cctv")).performClick();
+            ViewGroup rows = channelRows();
+            require(rows.getChildAt(rows.getChildCount() - 1).performClick(), "cannot select deep CCTV channel");
+        });
+        waitForIdleSync();
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP); // Exit emulator touch mode with a real remote key.
+        main(() -> require(channelRows().findViewWithTag(selectedPid()).requestFocus(), "cannot focus playing CCTV"));
+        String cctvPid = selectedPid();
+        long handle = session();
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+        assertFirstPageFocus("weishi", cctvPid);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+        assertFirstPageFocus("weishi", cctvPid); // The outside edge must retain channel focus.
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        assertPlayingChannelFocus("yangshi", cctvPid);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        assertPlayingChannelFocus("yangshi", cctvPid);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+        assertFirstPageFocus("weishi", cctvPid);
+        main(() -> {
+            ViewGroup rows = channelRows();
+            require(rows.getChildAt(rows.getChildCount() - 1).requestFocus(), "cannot focus deep satellite channel");
+        });
+        sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+        waitCondition(this::settingsShowing, 3000, "MENU did not open settings while browsing another group");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> !settingsShowing(), 3000, "BACK did not close settings");
+        main(() -> {
+            ViewGroup rows = channelRows();
+            require("weishi".equals(field("group")) && rows.getChildAt(rows.getChildCount() - 1).hasFocus(),
+                    "settings return lost the browsed group or deep channel focus");
+            require(cctvPid.equals(selectedPid()), "settings changed the playing channel");
+        });
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        String satellitePid = selectedPid();
+        require(!satellitePid.equals(cctvPid), "CENTER did not select the satellite channel");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        assertFirstPageFocus("yangshi", satellitePid);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+        assertPlayingChannelFocus("weishi", satellitePid);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        assertFirstPageFocus("yangshi", satellitePid);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        assertPlayingChannelFocus("weishi", satellitePid);
+        require(session() == handle, "group browsing recreated playback session");
+        currentStep.put("deepCctvPid", cctvPid).put("deepSatellitePid", satellitePid);
+        complete();
+    }
+
+    private void assertFirstPageFocus(String group, String playingPid) throws Exception {
+        waitForIdleSync();
+        main(() -> {
+            require(group.equals(field("group")), "horizontal key did not switch channel group");
+            require(playingPid.equals(selectedPid()), "group browsing changed the playing channel");
+            ViewGroup rows = channelRows();
+            View viewport = (View) rows.getParent();
+            Rect viewportBounds = new Rect(); viewport.getGlobalVisibleRect(viewportBounds);
+            View focus = activity.getCurrentFocus();
+            require(focus != null && focus.getParent() == rows, "group switch lost channel focus");
+            int fullyVisible = 0;
+            for (int i = 0; i < rows.getChildCount(); i++) {
+                View row = rows.getChildAt(i); int[] point = new int[2]; row.getLocationOnScreen(point);
+                if (point[1] >= viewportBounds.top && point[1] + row.getHeight() <= viewportBounds.bottom) fullyVisible++;
+            }
+            require(viewport.getScrollY() == 0, "other group did not reset to the first page");
+            require(fullyVisible > 0 && focus == rows.getChildAt(fullyVisible / 2), "focus is not in the middle of the first page");
+        });
+    }
+
+    private void assertPlayingChannelFocus(String group, String pid) throws Exception {
+        waitForIdleSync();
+        main(() -> {
+            require(group.equals(field("group")) && pid.equals(selectedPid()), "return changed playing channel or group");
+            View row = channelRows().findViewWithTag(pid);
+            require(row != null && row.hasFocus(), "return did not focus the playing channel");
+            Rect visible = new Rect();
+            require(row.getLocalVisibleRect(visible) && visible.height() == row.getHeight(), "playing channel is outside the viewport");
+        });
+    }
+
     private void navigationAndFullscreen() throws Exception {
         begin("remote-navigation-and-fullscreen");
         selectChannel(CHANNELS[0]);
@@ -246,6 +336,59 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         });
         if (!basic) awaitProgress(CHANNELS[2][1], 2);
     }
+    private void playbackFeedback() throws Exception {
+        begin("ui-feedback-with-controlled-status-snapshots");
+        // Exercise UI decisions deterministically; these snapshots do not prove live playback.
+        main(() -> ((android.os.Handler) field("handler")).removeCallbacks((Runnable) field("poll")));
+        try {
+            assertPlaybackFeedback("loading", 0, true, false);
+            main(() -> {
+                ViewGroup player = (ViewGroup) viewField("playerArea");
+                for (int i = 0; i < player.getChildCount(); i++) {
+                    View child = player.getChildAt(i);
+                    require(!(child instanceof android.widget.TextView) || child instanceof Button,
+                            "player still contains a text status overlay");
+                }
+                require(!viewField("loading").isFocusable(), "spinner steals remote focus");
+            });
+            assertPlaybackFeedback("loading", 10, false, false);
+            assertPlaybackFeedback("loading", 20, false, false);
+            SystemClock.sleep(2700);
+            assertPlaybackFeedback("loading", 20, true, false);
+            assertPlaybackFeedback("loading", 30, false, false);
+            assertPlaybackFeedback("paused", 30, false, false);
+            assertPlaybackFeedback("error", 30, false, true);
+            main(() -> {
+                android.widget.FrameLayout.LayoutParams position =
+                        (android.widget.FrameLayout.LayoutParams) viewField("retry").getLayoutParams();
+                require((position.gravity & android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.BOTTOM,
+                        "retry action still covers the center of video");
+            });
+            assertPlaybackFeedback("loading", 0, true, false);
+            assertPlaybackFeedback("playing", 10, false, false);
+            currentStep.put("controlledUiCases", 9).put("noCenteredStatusText", true)
+                    .put("advancingVideoHidesSpinnerDuringLoading", true).put("stalledVideoShowsSpinner", true);
+            complete();
+        } finally {
+            main(() -> ((android.os.Handler) field("handler")).post((Runnable) field("poll")));
+        }
+    }
+
+    private void assertPlaybackFeedback(String phase, long frames, boolean spinner, boolean retryVisible) throws Exception {
+        JSONObject sample = new JSONObject().put("state", phase).put("pid", selectedPid())
+                .put("videoFrames", frames).put("videoWidth", frames > 0 ? 1920 : 0)
+                .put("videoHeight", frames > 0 ? 1080 : 0).put("message", "网络连接失败，请重试");
+        main(() -> {
+            java.lang.reflect.Method update = MainActivity.class.getDeclaredMethod("showStatus", JSONObject.class);
+            update.setAccessible(true);
+            update.invoke(activity, sample);
+            require((viewField("loading").getVisibility() == View.VISIBLE) == spinner,
+                    "unexpected spinner visibility for " + phase);
+            require((viewField("retry").getVisibility() == View.VISIBLE) == retryVisible,
+                    "unexpected retry visibility for " + phase);
+        });
+    }
+
     private void overlays(boolean basic) throws Exception {
         begin("full-size-live-video-under-native-translucent-overlays");
         if (!basic) { selectChannel(CHANNELS[2]); awaitProgress(CHANNELS[2][1], 2); }
