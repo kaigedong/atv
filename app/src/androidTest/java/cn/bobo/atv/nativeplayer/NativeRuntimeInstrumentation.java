@@ -84,6 +84,7 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "remote": navigationAndFullscreen(); break;
                 case "groups": groupNavigation(); break;
                 case "channel-idle": channelIdle(); break;
+                case "back-exit": backExit(); break;
                 case "feedback": playbackFeedback(); break;
                 case "network": network(false); break;
                 case "startup-network": network(true); break;
@@ -178,6 +179,72 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
         waitCondition(() -> !boolField("fullscreen") && channelRows().hasFocus() && windowFocused(),
                 3000, "channel overlay did not acquire focus");
+    }
+
+    private void backExit() throws Exception {
+        begin("back-closes-overlays-before-exit-confirmation");
+        freshChannelOverlay();
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> boolField("fullscreen"), 3000, "BACK did not close channels");
+        require(!viewField("exitHint").isShown() && !activity.isFinishing(), "closing channels armed exit");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+        waitCondition(this::settingsFocused, 3000, "settings did not acquire focus");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> !settingsShowing() && windowFocused(), 3000, "BACK did not close settings");
+        require(!viewField("exitHint").isShown() && !activity.isFinishing(), "closing settings armed exit");
+        complete();
+
+        begin("first-back-shows-bottom-hint-and-timeout-keeps-playback-open");
+        long handle = session();
+        String pid = selectedPid();
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> viewField("exitHint").isShown(), 1000, "first BACK did not show exit hint");
+        main(() -> {
+            android.widget.TextView message = (android.widget.TextView) viewField("exitHint");
+            require(resourceString("press_back_again_to_exit").contentEquals(message.getText()), "wrong exit message");
+            require(!message.isFocusable() && !message.isClickable(), "exit hint consumes remote focus or clicks");
+        });
+        Rect player = bounds("playerArea"), message = bounds("exitHint");
+        require(message.centerY() > player.centerY() && message.bottom < player.bottom
+                && Math.abs(message.centerX() - player.centerX()) <= 2, "exit hint is not bottom-centered");
+        require(!activity.isFinishing() && session() == handle && pid.equals(selectedPid()), "first BACK interrupted playback");
+        waitCondition(() -> !viewField("exitHint").isShown(), 4000, "exit hint did not expire");
+        require(!activity.isFinishing() && session() == handle, "timeout exited playback");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> viewField("exitHint").isShown(), 1000, "BACK after timeout did not start fresh confirmation");
+        require(!activity.isFinishing(), "BACK after timeout exited playback");
+        complete();
+
+        begin("other-input-and-background-cancel-exit-confirmation");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        waitCondition(() -> !boolField("fullscreen"), 1000, "CENTER did not open channels");
+        require(!viewField("exitHint").isShown(), "opening channels retained exit hint");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> viewField("exitHint").isShown(), 1000, "cannot arm exit before background");
+        main(() -> callActivityOnPause(activity));
+        require(!viewField("exitHint").isShown(), "background retained exit hint");
+        main(() -> callActivityOnResume(activity));
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> viewField("exitHint").isShown(), 1000, "resume did not require fresh confirmation");
+        require(!activity.isFinishing(), "first BACK after resume exited playback");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+        waitCondition(this::settingsFocused, 3000, "settings did not open during confirmation");
+        require(!viewField("exitHint").isShown(), "other remote input retained exit confirmation");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> !settingsShowing() && windowFocused(), 3000, "settings did not close after cancelling exit");
+        complete();
+
+        begin("second-back-within-window-exits-and-cleans-up");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> viewField("exitHint").isShown(), 1000, "cannot arm final exit");
+        require(!activity.isFinishing(), "first final BACK exited playback");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitCondition(() -> activity.isDestroyed() && session() == 0, 10000, "second BACK did not finish playback");
+        require(!viewField("exitHint").isShown(), "destroyed player retained exit hint");
+        awaitReleased(handle);
+        complete();
+        activity = null;
     }
 
     private void channelIdle() throws Exception {

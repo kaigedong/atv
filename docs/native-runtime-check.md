@@ -250,3 +250,17 @@ ATV_TEST_DEVICE=emulator-5574 ATV_TEST_MODE=audio-focus-basic ./scripts/android-
 ```sh
 ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=channel-idle ./scripts/android-runtime-check.sh
 ```
+
+## 播放页双次返回退出
+
+全屏首次返回显示底部居中的深色圆角提示“再按一次退出”，2.5 秒内再次返回才结束 Activity。
+超时只隐藏提示，继续留在播放页；频道列表和设置仍优先关闭。其他按键、打开菜单、窗口失焦、暂停或销毁会清除确认状态。
+提示不获取焦点、不拦截点击，独立叠加在视频上。
+
+新增 `back-exit` 验收在 Android TV API 36 模拟器通过：关闭浮层不触发退出确认、提示文案与底部居中位置、
+首次返回和超时后 session/频道不变、过期后重新确认、其他操作和暂停恢复取消确认，以及连续两次返回退出并释放原生线程。
+此用例不等待远端直播成功，不作为音视频输出验收。四 ABI Debug APK、设备测试 APK 构建及 `lintDebug` 均通过。
+
+```sh
+ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=back-exit ./scripts/android-runtime-check.sh
+```

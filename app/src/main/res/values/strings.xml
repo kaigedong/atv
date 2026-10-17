@@ -16,5 +16,6 @@
     <string name="no_surface">正在准备播放画面…</string>
     <string name="directory_failure">频道目录无法读取，请重新安装应用。</string>
     <string name="remote_hint">上下浏览 · 左右切换央视/卫视/设置 · 确认切台 · 返回收起菜单 · 全屏时确认/左键打开频道、右键设置</string>
+    <string name="press_back_again_to_exit">再按一次退出</string>
     <string name="exit_fullscreen">退出全屏</string>
 </resources>

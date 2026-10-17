@@ -7,6 +7,7 @@ import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.media.AudioManager;
 import android.os.Build;
@@ -46,7 +47,11 @@ import java.util.List;
 /** Native Android widgets and Surface lifecycle; all playback work is owned by Rust. */
 public final class MainActivity extends Activity implements SurfaceHolder.Callback {
     private static final long CHANNEL_IDLE_MS = 5000;
+    private static final long EXIT_CONFIRMATION_MS = 2500;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable hideExitHint = this::clearExitConfirmation;
+    private long exitConfirmationDeadline;
+    private TextView exitHint;
     private final Runnable hideIdleChannels = () -> {
         if (canHideIdleChannels()) setFullscreen(true);
     };
@@ -186,6 +191,21 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         hint.setGravity(Gravity.CENTER);
         hint.setBackgroundColor(Color.argb(180, 12, 13, 16));
         root.addView(hint, new FrameLayout.LayoutParams(-1, dp(36), Gravity.BOTTOM));
+
+        exitHint = text(getString(R.string.press_back_again_to_exit), 18);
+        exitHint.setGravity(Gravity.CENTER);
+        exitHint.setPadding(dp(24), dp(12), dp(24), dp(12));
+        exitHint.setFocusable(false);
+        exitHint.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        GradientDrawable exitBackground = new GradientDrawable();
+        exitBackground.setColor(Color.argb(225, 20, 22, 28));
+        exitBackground.setCornerRadius(dp(12));
+        exitHint.setBackground(exitBackground);
+        exitHint.setVisibility(View.GONE);
+        FrameLayout.LayoutParams exitPosition = new FrameLayout.LayoutParams(
+                -2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        exitPosition.setMargins(dp(24), 0, dp(24), dp(80));
+        root.addView(exitHint, exitPosition);
 
         loadChannels();
         preferredQuality = getPreferences(MODE_PRIVATE).getString("quality", "auto");
@@ -360,6 +380,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
 
     private void setFullscreen(boolean value, boolean restorePlayingChannel) {
+        clearExitConfirmation();
         fullscreen = value;
         sidebar.setVisibility(value ? View.GONE : View.VISIBLE);
         topbar.setVisibility(value ? View.GONE : View.VISIBLE);
@@ -407,6 +428,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         // Include keys consumed here before Activity.dispatchKeyEvent can notify onUserInteraction.
         if (event.getAction() == KeyEvent.ACTION_DOWN || event.getAction() == KeyEvent.ACTION_UP) updateChannelAutoHide();
         int key = event.getKeyCode();
+        if (key != KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_DOWN) clearExitConfirmation();
         if (!fullscreen && channelRows.hasFocus()
                 && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
@@ -428,7 +450,26 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     private void handleBack() {
         if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
-        else if (!fullscreen) setFullscreen(true); else finish();
+        else if (!fullscreen) setFullscreen(true);
+        else {
+            long now = SystemClock.elapsedRealtime();
+            if (exitConfirmationDeadline > now) {
+                clearExitConfirmation();
+                finish();
+            } else {
+                exitConfirmationDeadline = now + EXIT_CONFIRMATION_MS;
+                exitHint.setVisibility(View.VISIBLE);
+                handler.removeCallbacks(hideExitHint);
+                // Expiry only dismisses the hint; it must never finish playback.
+                handler.postDelayed(hideExitHint, EXIT_CONFIRMATION_MS);
+            }
+        }
+    }
+
+    private void clearExitConfirmation() {
+        exitConfirmationDeadline = 0;
+        handler.removeCallbacks(hideExitHint);
+        if (exitHint != null) exitHint.setVisibility(View.GONE);
     }
     @SuppressLint("GestureBackNavigation") // API 33+ uses the native dispatcher above.
     @SuppressWarnings("deprecation")
@@ -443,6 +484,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (!automaticCheckStarted) handler.postDelayed(automaticCheck, 10000);
     }
     @Override protected void onPause() {
+        clearExitConfirmation();
         resumed = false; handler.removeCallbacks(poll);
         handler.removeCallbacks(hideIdleChannels);
         handler.removeCallbacks(automaticCheck);
@@ -460,6 +502,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus) clearExitConfirmation();
         updateChannelAutoHide();
         // Android 15+ can deny an initial request before the Activity becomes the top app.
         if (hasFocus && resumed && audioFocus != null && !audioFocus.hasRequest() && NativeBridge.available())
@@ -471,6 +514,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         super.onSaveInstanceState(state);
     }
     @Override protected void onDestroy() {
+        clearExitConfirmation();
         resumed = false;
         handler.removeCallbacks(hideIdleChannels);
         audioFocus.abandon();
