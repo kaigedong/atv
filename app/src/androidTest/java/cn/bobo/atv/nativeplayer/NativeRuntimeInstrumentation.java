@@ -83,6 +83,7 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "retry": selectChannel(CHANNELS[0]); awaitProgress(CHANNELS[0][1], 3); retry(); break;
                 case "remote": navigationAndFullscreen(); break;
                 case "groups": groupNavigation(); break;
+                case "channel-idle": channelIdle(); break;
                 case "feedback": playbackFeedback(); break;
                 case "network": network(false); break;
                 case "startup-network": network(true); break;
@@ -170,6 +171,65 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         navigationAndFullscreen();
         retry();
         lifecycle();
+    }
+
+    private void freshChannelOverlay() throws Exception {
+        if (!boolField("fullscreen")) sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+        waitCondition(() -> !boolField("fullscreen") && channelRows().hasFocus() && windowFocused(),
+                3000, "channel overlay did not acquire focus");
+    }
+
+    private void channelIdle() throws Exception {
+        selectChannel(CHANNELS[0]);
+        awaitProgress(CHANNELS[0][1], 2);
+        long handle = session();
+        begin("idle-channels-close-without-changing-playback");
+        freshChannelOverlay();
+        JSONObject before = status();
+        SystemClock.sleep(3500);
+        require(!boolField("fullscreen"), "channels closed before the idle delay");
+        waitCondition(() -> boolField("fullscreen"), 4000, "idle channel list did not close");
+        require(viewField("sidebar").getVisibility() == View.GONE, "idle channel sidebar remained visible");
+        JSONObject after = status();
+        require(session() == handle && CHANNELS[0][1].equals(selectedPid()), "idle close changed playback selection or Surface");
+        require(after.optLong("videoFrames") > before.optLong("videoFrames")
+                && after.optLong("audioFrames") > before.optLong("audioFrames"), "idle close interrupted audio/video output");
+        complete();
+
+        begin("remote-input-restarts-channel-idle-delay");
+        freshChannelOverlay();
+        SystemClock.sleep(3000);
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+        SystemClock.sleep(2500);
+        require(!boolField("fullscreen"), "remote input did not restart the idle delay");
+        waitCondition(() -> boolField("fullscreen"), 4000, "channels did not close after renewed inactivity");
+        require(CHANNELS[0][1].equals(selectedPid()), "browsing selected a channel without confirmation");
+        complete();
+
+        begin("non-channel-focus-does-not-auto-close");
+        freshChannelOverlay();
+        main(() -> require(viewField("settingsButton").requestFocus(), "cannot focus top settings button"));
+        SystemClock.sleep(5500);
+        require(!boolField("fullscreen"), "non-channel focus was closed by the channel timer");
+        main(() -> require(channelRows().findViewWithTag(CHANNELS[0][1]).requestFocus(), "cannot return focus to channels"));
+        waitCondition(() -> boolField("fullscreen"), 7000, "returning channel focus did not arm idle closing");
+        complete();
+
+        begin("settings-exempt-and-return-starts-new-idle-delay");
+        freshChannelOverlay();
+        sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+        waitCondition(this::settingsFocused, 3000, "settings did not open for idle exemption check");
+        SystemClock.sleep(5500);
+        require(settingsFocused(), "channel idle timer closed settings");
+        sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+        waitCondition(() -> !settingsShowing() && !boolField("fullscreen") && windowFocused(),
+                3000, "settings LEFT did not restore channels");
+        SystemClock.sleep(1500);
+        require(!boolField("fullscreen"), "old idle deadline immediately closed restored channels");
+        waitCondition(() -> boolField("fullscreen"), 5500, "restored channel list did not close after inactivity");
+        require(session() == handle && CHANNELS[0][1].equals(selectedPid()), "idle settings navigation changed playback");
+        complete();
     }
 
     private void groupNavigation() throws Exception {
@@ -297,6 +357,7 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         // directional key exits touch mode just as a TV remote does; do not
         // change production focusability or use a privileged touch-mode setter.
         currentStep.put("remotePreparation", "real KEYCODE_DPAD_UP");
+        if (boolField("fullscreen")) sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
         waitForIdleSync();
         main(() -> {
@@ -313,6 +374,7 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         require(CHANNELS[1][1].equals(focusTag.get()), "DPAD_DOWN did not focus CCTV2");
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
         awaitProgress(CHANNELS[1][1], 3);
+        if (boolField("fullscreen")) sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
         main(() -> {
             Button full = findButton(activity.getWindow().getDecorView(), resourceString("fullscreen"));
             recordFocus("fullscreenFocusBeforeRequest", full);

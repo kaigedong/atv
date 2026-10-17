@@ -237,3 +237,16 @@ ATV_TEST_DEVICE=emulator-5574 ATV_TEST_MODE=audio-focus-basic ./scripts/android-
 本轮最终 APK 的四 ABI 构建、lint、API 19 audio-focus-basic、TV audio-lifecycle、groups 和 lifecycle 全部通过。
 六个实际输出采样阶段均通过：首次播放、三次重开和重新获得焦点后均有非零声音样本；失焦后排空尾音的对照窗口为零样本。
 本地结果位于 test-artifacts/native/audio-reopen/verified-tv/，旧版兼容结果位于同目录下的 api19/。
+
+## 频道列表闲置收起
+
+频道行持有焦点且窗口在前台时，连续 5 秒没有操作会收起频道列表并回到全屏。
+遥控按键（包括长按重复事件）和频道焦点变化会重新计时；焦点移到顶部按钮、打开设置、窗口失焦或进入后台时取消计时。
+重新打开列表或从设置返回后从头计时。收起只改变界面，不选择频道或重建播放会话。
+
+新增 channel-idle 验收：检查延迟收起、按键续时、非频道焦点豁免、设置豁免与返回后的新倒计时，
+并检查收起前后 session/频道不变、音视频计数继续推进。TV 模拟器的 channel-idle、groups 和 remote 均通过，构建和 lint 通过。
+
+```sh
+ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=channel-idle ./scripts/android-runtime-check.sh
+```

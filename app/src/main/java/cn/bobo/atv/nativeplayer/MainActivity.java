@@ -45,7 +45,11 @@ import java.util.List;
 
 /** Native Android widgets and Surface lifecycle; all playback work is owned by Rust. */
 public final class MainActivity extends Activity implements SurfaceHolder.Callback {
+    private static final long CHANNEL_IDLE_MS = 5000;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable hideIdleChannels = () -> {
+        if (canHideIdleChannels()) setFullscreen(true);
+    };
     private final List<Channel> channels = new ArrayList<>();
     private LinearLayout sidebar, channelRows, topbar;
     private ScrollView channelScroll;
@@ -173,6 +177,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 focusGroup();
             }
         });
+        root.getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> updateChannelAutoHide());
         channelScroll.addView(channelRows);
         sidebar.addView(channelScroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
@@ -360,7 +365,23 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         topbar.setVisibility(value ? View.GONE : View.VISIBLE);
         hint.setVisibility(value ? View.GONE : View.VISIBLE);
         if (!value && restorePlayingChannel) focusSelected();
+        updateChannelAutoHide();
         hideSystemBars();
+    }
+
+    private boolean canHideIdleChannels() {
+        return resumed && !fullscreen && channelRows != null && channelRows.hasFocus()
+                && getWindow().getDecorView().hasWindowFocus() && settingsDialog == null;
+    }
+
+    private void updateChannelAutoHide() {
+        handler.removeCallbacks(hideIdleChannels);
+        if (canHideIdleChannels()) handler.postDelayed(hideIdleChannels, CHANNEL_IDLE_MS);
+    }
+
+    @Override public void onUserInteraction() {
+        super.onUserInteraction();
+        updateChannelAutoHide();
     }
 
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -383,6 +404,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        // Include keys consumed here before Activity.dispatchKeyEvent can notify onUserInteraction.
+        if (event.getAction() == KeyEvent.ACTION_DOWN || event.getAction() == KeyEvent.ACTION_UP) updateChannelAutoHide();
         int key = event.getKeyCode();
         if (!fullscreen && channelRows.hasFocus()
                 && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT)) {
@@ -416,10 +439,12 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (NativeBridge.available()) audioFocus.acquire();
         syncPlaybackAudioFocus();
         handler.post(poll); hideSystemBars();
+        updateChannelAutoHide();
         if (!automaticCheckStarted) handler.postDelayed(automaticCheck, 10000);
     }
     @Override protected void onPause() {
         resumed = false; handler.removeCallbacks(poll);
+        handler.removeCallbacks(hideIdleChannels);
         handler.removeCallbacks(automaticCheck);
         syncPlaybackAudioFocus();
         audioFocus.abandon();
@@ -435,6 +460,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        updateChannelAutoHide();
         // Android 15+ can deny an initial request before the Activity becomes the top app.
         if (hasFocus && resumed && audioFocus != null && !audioFocus.hasRequest() && NativeBridge.available())
             audioFocus.acquire();
@@ -446,6 +472,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
     @Override protected void onDestroy() {
         resumed = false;
+        handler.removeCallbacks(hideIdleChannels);
         audioFocus.abandon();
         handler.removeCallbacks(automaticCheck);
         if (qualityDialog != null) qualityDialog.dismiss();
