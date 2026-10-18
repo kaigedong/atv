@@ -6,7 +6,9 @@
     <string name="satellite">卫视</string>
     <string name="fullscreen">收起菜单</string>
     <string name="settings">设置</string>
-    <string name="update_hint">每日检查，手动更新</string>
+    <string name="settings_update_available">设置，有新版本可更新</string>
+    <string name="software_update">软件更新</string>
+    <string name="update_hint">每小时检查，手动更新</string>
     <string name="retry">重新连接</string>
     <string name="loading">正在连接直播…</string>
     <string name="playing">直播中</string>

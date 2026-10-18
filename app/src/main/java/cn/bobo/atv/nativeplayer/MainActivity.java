@@ -48,6 +48,7 @@ import java.util.List;
 public final class MainActivity extends Activity implements SurfaceHolder.Callback {
     private static final long CHANNEL_IDLE_MS = 5000;
     private static final long EXIT_CONFIRMATION_MS = 2500;
+    private static final long UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000L;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable hideExitHint = this::clearExitConfirmation;
     private long exitConfirmationDeadline;
@@ -77,19 +78,39 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private long lastStatusLog;
     private Button settingsButton, qualityButton, updateCheck, updateDownload, updateInstall, updateCancel;
     private TextView qualitySummary, updateSummary;
+    private View settingsUpdateDot, updateSectionDot;
     private Dialog settingsDialog;
     private AlertDialog qualityDialog, messageDialog;
     private JSONObject lastPlayback = new JSONObject(), lastUpdate = new JSONObject();
     private String preferredQuality = "auto";
     private long updater;
     private File updateDirectory;
-    private boolean installing, automaticCheckStarted;
-    private final Runnable automaticCheck = () -> {
-        if (updater != 0 && resumed && !automaticCheckStarted) {
-            automaticCheckStarted = true;
-            NativeBridge.updateCommand(updater, 3);
+    private boolean installing;
+    private final Runnable automaticCheck = new Runnable() {
+        @Override public void run() {
+            if (updater == 0 || !resumed) return;
+            updateCommand(3);
+            // Failed, busy or already-ready operations also wait before another attempt.
+            scheduleAutomaticCheck(UPDATE_CHECK_INTERVAL_MS);
         }
     };
+
+    private void scheduleAutomaticCheck(long minimumDelayMs) {
+        handler.removeCallbacks(automaticCheck);
+        if (updater == 0 || !resumed) return;
+        long checkedAt = lastUpdate.optLong("lastCheckAt");
+        long elapsed = Math.max(0, System.currentTimeMillis() - checkedAt * 1000);
+        long remaining = checkedAt > 0 && !"idle".equals(lastUpdate.optString("state", "idle"))
+                ? Math.max(0, UPDATE_CHECK_INTERVAL_MS - elapsed) : 0;
+        handler.postDelayed(automaticCheck, Math.max(minimumDelayMs, remaining));
+    }
+
+    private void refreshUpdateStatus() throws org.json.JSONException {
+        long checkedAt = lastUpdate.optLong("lastCheckAt");
+        lastUpdate = new JSONObject(NativeBridge.updateStatus(updater));
+        if (lastUpdate.optLong("lastCheckAt") != checkedAt) scheduleAutomaticCheck(0);
+        refreshSettings();
+    }
 
     private final Runnable poll = new Runnable() {
         @Override public void run() {
@@ -100,7 +121,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 }
             }
             if (updater != 0) {
-                try { lastUpdate = new JSONObject(NativeBridge.updateStatus(updater)); refreshSettings(); }
+                try { refreshUpdateStatus(); }
                 catch (RuntimeException | LinkageError | org.json.JSONException error) { }
             }
             if (resumed) handler.postDelayed(this, 500);
@@ -147,7 +168,13 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         topbar.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1));
         settingsButton = button(getString(R.string.settings));
         settingsButton.setOnClickListener(view -> openSettings());
-        topbar.addView(settingsButton);
+        FrameLayout settingsEntry = new FrameLayout(this);
+        settingsEntry.addView(settingsButton, new FrameLayout.LayoutParams(-2, dp(48)));
+        settingsUpdateDot = updateDot();
+        FrameLayout.LayoutParams dotPosition = new FrameLayout.LayoutParams(dp(8), dp(8), Gravity.TOP | Gravity.RIGHT);
+        dotPosition.setMargins(0, dp(6), dp(6), 0);
+        settingsEntry.addView(settingsUpdateDot, dotPosition);
+        topbar.addView(settingsEntry);
         Button full = button(getString(R.string.fullscreen));
         full.setId(View.generateViewId());
         full.setOnClickListener(view -> setFullscreen(!fullscreen));
@@ -481,7 +508,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         syncPlaybackAudioFocus();
         handler.post(poll); hideSystemBars();
         updateChannelAutoHide();
-        if (!automaticCheckStarted) handler.postDelayed(automaticCheck, 10000);
+        if (updater != 0) {
+            try { refreshUpdateStatus(); }
+            catch (RuntimeException | LinkageError | org.json.JSONException ignored) { }
+        }
+        scheduleAutomaticCheck(10000);
     }
     @Override protected void onPause() {
         clearExitConfirmation();
@@ -565,6 +596,19 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         return view;
     }
 
+    private View updateDot() {
+        View dot = new View(this);
+        GradientDrawable background = new GradientDrawable();
+        background.setShape(GradientDrawable.OVAL);
+        background.setColor(Color.rgb(244, 67, 54));
+        dot.setBackground(background);
+        dot.setFocusable(false);
+        dot.setClickable(false);
+        dot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        dot.setVisibility(View.GONE);
+        return dot;
+    }
+
     private void styleOverlayWindow(Dialog dialog, boolean customPanel) {
         android.view.Window window = dialog.getWindow();
         if (window == null) return;
@@ -598,7 +642,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         qualityButton = button("选择清晰度");
         qualityButton.setOnClickListener(view -> chooseQuality());
         content.addView(qualityButton, new LinearLayout.LayoutParams(-1, dp(48)));
-        content.addView(text("软件更新", 21));
+        LinearLayout updateHeading = new LinearLayout(this);
+        updateHeading.setGravity(Gravity.CENTER_VERTICAL);
+        updateHeading.addView(text(getString(R.string.software_update), 21));
+        updateSectionDot = updateDot();
+        LinearLayout.LayoutParams sectionDotPosition = new LinearLayout.LayoutParams(dp(8), dp(8));
+        sectionDotPosition.leftMargin = dp(8);
+        updateHeading.addView(updateSectionDot, sectionDotPosition);
+        content.addView(updateHeading);
         content.addView(text("当前版本：" + BuildConfig.VERSION_NAME, 16));
         content.addView(text(getString(R.string.update_hint), 14));
         updateSummary = text("尚未检查", 16);
@@ -638,6 +689,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         settingsDialog.setOnDismissListener(dialog -> {
             settingsDialog = null;
             qualitySummary = updateSummary = null;
+            updateSectionDot = null;
             qualityButton = updateCheck = updateDownload = updateInstall = updateCancel = null;
             if (!isFinishing() && !isDestroyed()) {
                 if (restoreChannels || returnToSatellites[0]) setFullscreen(false, false);
@@ -651,7 +703,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         settingsDialog.show();
         styleOverlayWindow(settingsDialog, true);
         refreshSettings();
-        qualityButton.requestFocus();
+        if (updateInstall.isShown() && updateInstall.isEnabled()) updateInstall.requestFocus();
+        else if (updateDownload.isShown() && updateDownload.isEnabled()) updateDownload.requestFocus();
+        else qualityButton.requestFocus();
     }
 
     private String qualityLabel(String id) {
@@ -701,7 +755,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private void refreshSettings() {
         String phase = lastUpdate.optString("state", "idle");
         boolean available = "available".equals(phase), ready = "ready".equals(phase);
-        if (settingsButton != null) setTextChanged(settingsButton, available || ready ? "设置 · 有更新" : getString(R.string.settings));
+        boolean hasUpdate = lastUpdate.optInt("versionCode") > BuildConfig.VERSION_CODE;
+        if (settingsUpdateDot != null) settingsUpdateDot.setVisibility(hasUpdate ? View.VISIBLE : View.GONE);
+        if (updateSectionDot != null) updateSectionDot.setVisibility(hasUpdate ? View.VISIBLE : View.GONE);
+        if (settingsButton != null) settingsButton.setContentDescription(getString(
+                hasUpdate ? R.string.settings_update_available : R.string.settings));
         if (settingsDialog == null || qualitySummary == null) return;
         String actual = lastPlayback.optString("effectiveQuality", "");
         int width = lastPlayback.optInt("videoWidth"), height = lastPlayback.optInt("videoHeight");
@@ -741,7 +799,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private void updateCommand(int command) {
         if (updater == 0) return;
         NativeBridge.updateCommand(updater, command);
-        try { lastUpdate = new JSONObject(NativeBridge.updateStatus(updater)); } catch (org.json.JSONException ignored) { }
+        try { refreshUpdateStatus(); } catch (org.json.JSONException ignored) { }
         refreshSettings();
     }
     private void installUpdate() {

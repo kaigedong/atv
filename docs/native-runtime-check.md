@@ -264,3 +264,23 @@ ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=channel-idle ./scripts/android-runti
 ```sh
 ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=back-exit ./scripts/android-runtime-check.sh
 ```
+
+## 每小时检查更新与红点提示
+
+首次无有效缓存或检查已到期时，Android 进入前台 10 秒后发起自动检查，此后按上次成功检查时间每小时调度；
+暂停时取消调度，回到前台按缓存时间恢复。Rust 将成功检查的 UNIX 秒以 `lastCheckAt` 返回给界面，避免请求耗时造成下一轮提前被节流。
+手动检查不受小时限制，自动检查不会覆盖已下载且等待安装的包。
+
+发现高于当前安装版本的更新后，设置按钮右上角与“软件更新”标题旁显示 8 dp 红点；
+红点不接收焦点或点击，设置按钮提供含新版本提示的无障碍描述。进入设置优先定位到下载或安装按钮。
+已知新版本在检查、下载、取消、失败或待安装阶段保留红点，确认当前已是最新版本时清除。
+
+Rust `atv-update` 的 11 项测试通过，覆盖 3599/3600 秒边界、手动检查、缓存时间恢复、忙碌拒绝及待安装包保护。
+Android TV API 36 的 `update-notice` 和 `groups` 通过，四 ABI Debug APK、设备测试 APK、`lintDebug`、架构及发布检查通过。
+`update-notice` 使用可控更新状态验证红点、文案、消失规则与下载/安装焦点，截取界面；
+用测试 Handler 观察实际安排的延迟，覆盖半小时剩余、已到期、一小时新周期、损坏缓存和后台恢复。
+该用例未实际等待一小时，受控状态不用于证明远端发布发现、下载或安装成功。
+
+```sh
+ATV_TEST_DEVICE=emulator-5572 ATV_TEST_MODE=update-notice ./scripts/android-runtime-check.sh
+```

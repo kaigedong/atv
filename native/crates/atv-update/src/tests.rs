@@ -168,7 +168,50 @@ fn cancellation_truncation_overflow_and_bad_hash_never_complete() {
 }
 
 #[test]
-fn cached_package_is_rehashed_and_a_changed_file_loses_installable_state() {
+fn automatic_checks_require_a_full_hour() {
+    let last_check = 10_000;
+    for state in ["available", "current", "error", "cancelled"] {
+        assert!(!check_allowed(state, true, last_check, last_check));
+        assert!(!check_allowed(state, true, last_check, last_check + 3599));
+        assert!(check_allowed(state, true, last_check, last_check + 3600));
+        assert!(check_allowed(state, true, last_check, last_check + 3601));
+        assert!(!check_allowed(state, true, last_check, last_check - 1));
+    }
+    // Missing or invalid metadata must remain recoverable even with a recent timestamp.
+    assert!(check_allowed("idle", true, last_check, last_check));
+}
+
+#[test]
+fn manual_checks_bypass_automatic_throttling() {
+    let last_check = 10_000;
+    for state in [
+        "available",
+        "current",
+        "error",
+        "cancelled",
+        "idle",
+        "ready",
+    ] {
+        assert!(check_allowed(state, false, last_check, last_check));
+        assert!(check_allowed(state, false, last_check, last_check - 1));
+    }
+}
+
+#[test]
+fn busy_updater_rejects_manual_and_automatic_operations() {
+    let (config, _, _) = fixture();
+    let updater = Updater::new(config).unwrap();
+    updater.shared.lock().unwrap().busy = true;
+    let before = serde_json::to_value(updater.status()).unwrap();
+    for (download, automatic) in [(false, false), (false, true), (true, false), (true, true)] {
+        assert!(!updater.start(download, automatic));
+        assert_eq!(serde_json::to_value(updater.status()).unwrap(), before);
+    }
+    assert!(updater.shared.lock().unwrap().busy);
+}
+
+#[test]
+fn ready_package_survives_automatic_checks_and_is_rehashed_before_installation() {
     let directory = std::env::temp_dir().join(format!(
         "atv-update-test-{}",
         SystemTime::now()
@@ -196,6 +239,17 @@ fn cached_package_is_rehashed_and_a_changed_file_loses_installable_state() {
             bytes: content.len() as u64,
             release_url: String::new(),
         });
+    }
+    let before = serde_json::to_value(updater.status()).unwrap();
+    assert_eq!(updater.status().last_check_at, 0);
+    assert!(!check_allowed("ready", true, 10_000, 13_600));
+    assert!(!check_allowed("ready", true, 0, u64::MAX));
+    for download in [false, true] {
+        assert!(!updater.start(download, true));
+        assert_eq!(serde_json::to_value(updater.status()).unwrap(), before);
+        assert!(!updater.shared.lock().unwrap().busy);
+        assert!(updater.shared.lock().unwrap().candidate.is_some());
+        assert_eq!(fs::read(&path).unwrap(), content);
     }
     updater.verify_ready().unwrap();
     fs::write(&path, b"changed-apk").unwrap();
@@ -227,16 +281,42 @@ fn restart_retains_valid_update_and_throttles_only_when_cache_is_valid() {
         serde_json::to_vec(&cached).unwrap(),
     )
     .unwrap();
-    fs::write(directory.join("last-check"), now().to_string()).unwrap();
+    let timestamp = now();
+    fs::write(directory.join("last-check"), timestamp.to_string()).unwrap();
     let updater = Updater::new(config.clone()).unwrap();
     assert_eq!(updater.status().state, "available");
+    assert_eq!(updater.status().last_check_at, timestamp);
+    let status = serde_json::to_value(updater.status()).unwrap();
+    assert_eq!(status["lastCheckAt"], json!(timestamp));
+    assert!(status.get("last_check_at").is_none());
     assert!(!updater.start(false, true));
+    assert!(!check_allowed(
+        updater.status().state,
+        true,
+        updater.status().last_check_at,
+        timestamp + 3599,
+    ));
+    assert!(check_allowed(
+        updater.status().state,
+        true,
+        updater.status().last_check_at,
+        timestamp + 3600,
+    ));
     config.current_version = 1007;
-    assert_eq!(
-        Updater::new(config.clone()).unwrap().status().state,
-        "current"
-    );
+    let current = Updater::new(config.clone()).unwrap().status();
+    assert_eq!(current.state, "current");
+    assert_eq!(current.last_check_at, timestamp);
     fs::write(directory.join("metadata.json"), b"corrupted").unwrap();
-    assert_eq!(Updater::new(config).unwrap().status().state, "idle");
+    let recovered = Updater::new(config.clone()).unwrap().status();
+    assert_eq!(recovered.state, "idle");
+    assert_eq!(recovered.last_check_at, timestamp);
+    assert!(check_allowed(
+        recovered.state,
+        true,
+        recovered.last_check_at,
+        timestamp,
+    ));
+    fs::write(directory.join("last-check"), b"invalid").unwrap();
+    assert_eq!(Updater::new(config).unwrap().status().last_check_at, 0);
     fs::remove_dir_all(directory).unwrap();
 }

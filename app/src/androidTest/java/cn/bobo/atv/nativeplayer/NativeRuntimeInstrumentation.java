@@ -85,6 +85,7 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
                 case "groups": groupNavigation(); break;
                 case "channel-idle": channelIdle(); break;
                 case "back-exit": backExit(); break;
+                case "update-notice": updateNotice(); break;
                 case "feedback": playbackFeedback(); break;
                 case "network": network(false); break;
                 case "startup-network": network(true); break;
@@ -179,6 +180,134 @@ public final class NativeRuntimeInstrumentation extends Instrumentation {
         sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
         waitCondition(() -> !boolField("fullscreen") && channelRows().hasFocus() && windowFocused(),
                 3000, "channel overlay did not acquire focus");
+    }
+
+    private void updateNotice() throws Exception {
+        android.os.Handler originalHandler = (android.os.Handler) field("handler");
+        Runnable automatic = (Runnable) field("automaticCheck");
+        AtomicReference<Long> scheduledAt = new AtomicReference<>();
+        // Observe the actual Handler deadline without waiting an hour or sending update requests.
+        android.os.Handler recordingHandler = new android.os.Handler(android.os.Looper.getMainLooper()) {
+            @Override public boolean sendMessageAtTime(android.os.Message message, long uptimeMillis) {
+                if (message.getCallback() == automatic) { scheduledAt.set(uptimeMillis); return true; }
+                return super.sendMessageAtTime(message, uptimeMillis);
+            }
+        };
+        Field handlerField = MainActivity.class.getDeclaredField("handler");
+        handlerField.setAccessible(true);
+        try {
+            main(() -> {
+                originalHandler.removeCallbacks((Runnable) field("poll"));
+                originalHandler.removeCallbacks((Runnable) field("hideIdleChannels"));
+                originalHandler.removeCallbacks(automatic);
+                handlerField.set(activity, recordingHandler);
+            });
+            begin("hourly-update-deadlines-and-background-cancellation");
+            assertUpdateDeadline("current", 1800, 0, 1800000, scheduledAt);
+            assertUpdateDeadline("current", 3601, 0, 0, scheduledAt);
+            assertUpdateDeadline("current", 0, 0, 3600000, scheduledAt);
+            assertUpdateDeadline("idle", 0, 10000, 10000, scheduledAt);
+            main(() -> {
+                callActivityOnPause(activity);
+                scheduledAt.set(null);
+                automatic.run();
+                require(scheduledAt.get() == null, "background scheduled an automatic update check");
+                callActivityOnResume(activity);
+                require(scheduledAt.get() != null, "resume did not restore automatic update scheduling");
+                originalHandler.removeCallbacks((Runnable) field("poll"));
+                recordingHandler.removeCallbacks((Runnable) field("poll"));
+            });
+            complete();
+
+            begin("update-red-dots-persist-until-no-newer-version");
+            freshChannelOverlay();
+            showUpdateSample("current", false);
+            require(!viewField("settingsUpdateDot").isShown(), "latest version shows an update dot");
+            showUpdateSample("available", true);
+            main(() -> {
+                View dot = viewField("settingsUpdateDot"), button = viewField("settingsButton");
+                require(dot.isShown() && !dot.isFocusable() && !dot.isClickable(), "settings dot steals input");
+                require(resourceString("settings_update_available").contentEquals(button.getContentDescription()), "missing accessible update notice");
+                require(resourceString("settings").contentEquals(((Button) button).getText()), "badge changed settings label");
+            });
+            Rect buttonBounds = bounds("settingsButton"), dotBounds = bounds("settingsUpdateDot");
+            require(dotBounds.centerX() > buttonBounds.centerX() && dotBounds.centerY() < buttonBounds.centerY(),
+                    "settings dot is not in the upper-right corner");
+            saveUpdateNoticeScreenshot("settings-entry");
+            sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+            waitCondition(this::settingsFocused, 3000, "settings did not open for update");
+            require(viewField("updateSectionDot").isShown(), "software update section has no red dot");
+            require(viewField("updateDownload").hasFocus(), "new version did not focus download action");
+            require(resourceString("update_hint").contains("每小时"), "settings still describes daily checks");
+            saveUpdateNoticeScreenshot("software-update");
+            for (String phase : new String[]{"checking", "downloading", "cancelling", "cancelled", "error", "verifying", "ready"}) {
+                showUpdateSample(phase, true);
+                require(viewField("settingsUpdateDot").getVisibility() == View.VISIBLE && viewField("updateSectionDot").isShown(),
+                        "known update lost red dot in " + phase);
+            }
+            sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+            waitCondition(() -> !settingsShowing() && windowFocused(), 3000, "settings did not close");
+            sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+            waitCondition(this::settingsFocused, 3000, "settings did not reopen for ready update");
+            require(viewField("updateInstall").hasFocus(), "ready update did not focus install action");
+            showUpdateSample("current", false);
+            require(viewField("settingsUpdateDot").getVisibility() == View.GONE && !viewField("updateSectionDot").isShown(),
+                    "latest version did not clear update dots");
+            showUpdateSample("error", false);
+            require(!viewField("updateSectionDot").isShown(), "unknown update after error shows a red dot");
+            complete();
+        } finally {
+            main(() -> {
+                android.app.Dialog dialog = (android.app.Dialog) field("settingsDialog");
+                if (dialog != null) dialog.dismiss();
+                recordingHandler.removeCallbacksAndMessages(null);
+                handlerField.set(activity, originalHandler);
+                originalHandler.post((Runnable) field("poll"));
+                java.lang.reflect.Method schedule = MainActivity.class.getDeclaredMethod("scheduleAutomaticCheck", long.class);
+                schedule.setAccessible(true);
+                schedule.invoke(activity, 10000L);
+            });
+        }
+    }
+
+    private void assertUpdateDeadline(String phase, long secondsAgo, long minimum, long expected,
+                                      AtomicReference<Long> scheduledAt) throws Exception {
+        main(() -> {
+            JSONObject sample = new JSONObject().put("state", phase)
+                    .put("lastCheckAt", System.currentTimeMillis() / 1000 - secondsAgo);
+            Field status = MainActivity.class.getDeclaredField("lastUpdate"); status.setAccessible(true); status.set(activity, sample);
+            java.lang.reflect.Method schedule = MainActivity.class.getDeclaredMethod("scheduleAutomaticCheck", long.class);
+            schedule.setAccessible(true);
+            scheduledAt.set(null);
+            long before = SystemClock.uptimeMillis();
+            schedule.invoke(activity, minimum);
+            require(scheduledAt.get() != null && Math.abs(scheduledAt.get() - before - expected) < 1500,
+                    "unexpected hourly deadline for " + phase + " at " + secondsAgo + " seconds");
+        });
+    }
+
+    private void showUpdateSample(String phase, boolean newer) throws Exception {
+        int currentVersion = getTargetContext().getPackageManager().getPackageInfo(PACKAGE, 0).versionCode;
+        JSONObject sample = new JSONObject().put("state", phase).put("versionCode", currentVersion + (newer ? 1 : 0))
+                .put("versionName", "测试新版本").put("message", "更新请求失败，请重试");
+        main(() -> {
+            Field status = MainActivity.class.getDeclaredField("lastUpdate"); status.setAccessible(true); status.set(activity, sample);
+            java.lang.reflect.Method refresh = MainActivity.class.getDeclaredMethod("refreshSettings");
+            refresh.setAccessible(true); refresh.invoke(activity);
+        });
+    }
+
+    private void saveUpdateNoticeScreenshot(String name) throws Exception {
+        waitForIdleSync();
+        android.graphics.Bitmap screenshot = getUiAutomation().takeScreenshot();
+        require(screenshot != null, "cannot capture update red dot");
+        File directory = new File(getTargetContext().getExternalFilesDir(null), "runtime-native");
+        require(directory.isDirectory() || directory.mkdirs(), "cannot create screenshot directory");
+        File destination = new File(directory, runId + "-" + name + ".png");
+        try (FileOutputStream output = new FileOutputStream(destination)) {
+            require(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output), "cannot write update screenshot");
+        } finally { screenshot.recycle(); }
+        currentStep.put(name + "Screenshot", destination.getAbsolutePath());
     }
 
     private void backExit() throws Exception {

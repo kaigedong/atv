@@ -74,6 +74,7 @@ pub struct Status {
     pub ready_path: String,
     pub certificate_sha256: String,
     pub release_url: String,
+    pub last_check_at: u64,
 }
 struct Shared {
     status: Status,
@@ -93,6 +94,22 @@ impl Drop for Worker {
         WORKERS.fetch_sub(1, Ordering::AcqRel);
     }
 }
+const AUTOMATIC_CHECK_INTERVAL_SECS: u64 = 60 * 60;
+
+fn last_check_at(config: &Config) -> u64 {
+    fs::read_to_string(config.cache_dir.join("last-check"))
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0)
+}
+
+fn check_allowed(state: &str, automatic: bool, last_check: u64, current_time: u64) -> bool {
+    !automatic
+        || (state != "ready"
+            && (state == "idle"
+                || current_time.saturating_sub(last_check) >= AUTOMATIC_CHECK_INTERVAL_SECS))
+}
+
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -124,6 +141,7 @@ impl Updater {
             ready_path: String::new(),
             certificate_sha256: config.certificate.clone(),
             release_url: String::new(),
+            last_check_at: last_check_at(&config),
         };
         let cached = client::cached(&config);
         let candidate = match cached {
@@ -171,14 +189,13 @@ impl Updater {
         if shared.busy {
             return false;
         }
-        if automatic {
-            let timestamp = fs::read_to_string(self.config.cache_dir.join("last-check"))
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(0);
-            if shared.status.state != "idle" && now().saturating_sub(timestamp) < 24 * 3600 {
-                return false;
-            }
+        let timestamp = if automatic {
+            last_check_at(&self.config)
+        } else {
+            0
+        };
+        if !check_allowed(shared.status.state, automatic, timestamp, now()) {
+            return false;
         }
         let candidate = if download {
             let Some(candidate) = shared.candidate.clone() else {
@@ -221,9 +238,12 @@ impl Updater {
                 } else {
                     client::discover(&config, &cancel).and_then(|candidate| {
                         check_cancel(&cancel)?;
+                        let timestamp = now();
                         let _ = fs::create_dir_all(&config.cache_dir);
-                        let _ = fs::write(config.cache_dir.join("last-check"), now().to_string());
+                        let _ =
+                            fs::write(config.cache_dir.join("last-check"), timestamp.to_string());
                         let mut state = state.lock().expect("update state");
+                        state.status.last_check_at = timestamp;
                         state.candidate = candidate.clone();
                         if let Some(candidate) = candidate {
                             state.status.state = "available";
