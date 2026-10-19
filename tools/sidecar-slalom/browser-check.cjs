@@ -58,7 +58,8 @@ async function main() {
     }
     throw new Error(`Page did not settle: ${expression}`);
   }
-  const check = (label, expression) => evaluate(expression).then(value => { assert.ok(value, label); console.log(`PASS ${label}`); });
+  const hasWheelTrails = `(()=>{const c=document.getElementById('scene'); if(!c.width||!c.height)return false;const p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let blue=0;for(let i=0;i<p.length;i+=4)if(p[i+2]>130&&p[i+2]>p[i]*1.25&&p[i+2]>p[i+1]*1.15)blue++;return blue>10})()`;
+  const check = (label, expression) => evaluate(expression).then(value => { assert.ok(value, `${label}; browser errors: ${errors.map(error => error.exception?.description || error.text).join(' | ')}`); console.log(`PASS ${label}`); });
   try {
     await call('Browser.getVersion');
     const target = await call('Target.createTarget', { url: 'about:blank' });
@@ -66,8 +67,9 @@ async function main() {
     await call('Runtime.enable', {}, session);
     await call('Page.enable', {}, session);
     await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false }, session);
-    await call('Page.navigate', { url: pathToFileURL(path.join(__dirname, 'index.html')).href }, session);
+    await call('Page.navigate', { url: pathToFileURL(path.resolve(process.env.SIDECAR_PAGE || path.join(__dirname, 'index.html'))).href }, session);
     await until(`document.getElementById('result-badge')?.dataset.state === 'success'`);
+    if (process.env.SIDECAR_PAGE) await check('standalone entry has no external runtime assets', `document.querySelectorAll('script[src],link[rel="stylesheet"]').length===0`);
     await check('default route and four pole cues', `document.querySelectorAll('#pole-table tr').length===4 && !document.getElementById('play').disabled`);
     await check('all numeric results finite', `!['NaN','Infinity'].some(x=>document.querySelector('main').textContent.includes(x))`);
     await evaluate(`document.getElementById('play').click()`);
@@ -88,11 +90,15 @@ async function main() {
     }
     await evaluate(`document.getElementById('param-laneWidth').value='2.1'; document.getElementById('param-laneWidth').dispatchEvent(new Event('input', {bubbles:true}));`);
     await check('changed parameters invalidate stale route', `document.getElementById('play').disabled && document.getElementById('export').disabled && document.querySelectorAll('#pole-table tr').length===0 && document.getElementById('summary-clearance').textContent==='—'`);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await check('editing parameters keeps the previous wheel trails visible', hasWheelTrails);
+    await check('retained route is clearly marked as stale', `document.getElementById('scene').dataset.routeState==='stale' && document.getElementById('status').textContent.includes('上次线路')`);
     await evaluate(`document.getElementById('parameters').requestSubmit()`);
     await until(`document.getElementById('result-badge')?.dataset.state === 'danger'`);
     await check('infeasible course disables recommended playback', `document.getElementById('play').disabled && document.getElementById('recommendation').textContent.includes('尚未找到')`);
-    await evaluate(`document.getElementById('reset').click()`);
+    await evaluate(`document.getElementById('show-trails').checked=false; document.getElementById('show-envelope').checked=false; document.getElementById('reset').click()`);
     await until(`document.getElementById('result-badge')?.dataset.state === 'success'`);
+    await check('reset restores trails, envelope and overview', `document.getElementById('show-trails').checked && document.getElementById('show-envelope').checked && document.getElementById('view-overview').getAttribute('aria-pressed')==='true'`);
     await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, session);
     await check('mobile layout has no horizontal page overflow', `document.documentElement.scrollWidth <= document.documentElement.clientWidth`);
     if (process.env.SIDECAR_SCREENSHOTS) {
@@ -101,6 +107,16 @@ async function main() {
       const shot = await call('Page.captureScreenshot', { format: 'png' }, session);
       await fs.writeFile(path.join(process.env.SIDECAR_SCREENSHOTS, 'mobile.png'), Buffer.from(shot.data, 'base64'));
     }
+    await evaluate(`document.getElementById('scene').parentElement.style.display='none'; new Promise(resolve=>setTimeout(resolve,150));`);
+    await evaluate(`document.getElementById('scene').parentElement.style.display=''; new Promise(resolve=>setTimeout(resolve,150));`);
+    await check('route redraws after canvas is hidden and restored', hasWheelTrails);
+    await evaluate(`document.getElementById('play').click()`);
+    await until(`Number(document.getElementById('scrub').value)>2`);
+    await evaluate(`document.getElementById('play').click()`);
+    console.log('PASS playback continues after visibility is restored');
+    await evaluate(`Object.assign(document.getElementById('scene').style,{width:'60px',height:'90px',minHeight:'0'}); new Promise(resolve=>setTimeout(resolve,100));`);
+    await evaluate(`Object.assign(document.getElementById('scene').style,{width:'',height:'',minHeight:''}); new Promise(resolve=>setTimeout(resolve,100));`);
+    await check('route redraws after a very small embedded viewport', hasWheelTrails);
     assert.deepEqual(errors, [], 'No uncaught browser exceptions');
     console.log('PASS zero uncaught browser exceptions; file:// direct opening verified');
   } finally {

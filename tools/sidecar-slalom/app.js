@@ -66,18 +66,21 @@
   try { const saved = JSON.parse(localStorage.getItem('sidecar-slalom-v1')); if (saved) fill(M.validate(saved)); } catch { /* Storage is optional on file URLs. */ }
   function enablePlayback(enable) { for (const id of ['play', 'restart', 'scrub', 'export']) $(id).disabled = !enable; }
   function markDirty() {
-    if (busy) return;
     dirty = true; playing = false; $('play').textContent = '播放线路'; enablePlayback(false);
     $('result-badge').textContent = '参数待计算'; $('result-badge').dataset.state = 'pending';
-    $('status').textContent = '参数已改变，请重新计算。';
-    $('recommendation').textContent = '参数已改变，旧线路不再适用。计算后查看新的逐杆操作和净距。';
+    $('status').textContent = result ? '参数已改变，画面保留上次线路；请重新计算以应用新参数。' : '参数已改变，请重新计算。';
+    $('recommendation').textContent = '新参数尚未应用。画面保留上次计算线路作为参考，请重新计算后查看新的操作和净距。';
     $('pole-table').replaceChildren();
     for (const id of ['summary-clearance', 'summary-angle', 'summary-length', 'summary-time']) $(id).textContent = '—';
     staticDirty = true;
   }
-  $('parameters').addEventListener('input', markDirty);
+  $('parameters').addEventListener('input', () => { if (!busy) markDirty(); });
   $('parameters').addEventListener('submit', event => { event.preventDefault(); calculate(); });
-  $('reset').addEventListener('click', () => { fill(M.defaults); calculate(); });
+  $('reset').addEventListener('click', () => {
+    fill(M.defaults);
+    $('show-trails').checked = true; $('show-envelope').checked = true;
+    $('view-overview').click(); calculate();
+  });
   async function calculate() {
     if (busy) return;
     let p;
@@ -193,14 +196,15 @@
   function resize() {
     const canvas = $('scene'), rect = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
     sceneWidth = rect.width; sceneHeight = rect.height;
+    staticDirty = true;
+    if (rect.width <= 0 || rect.height <= 0) return;
     canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
     backdrop.width = canvas.width; backdrop.height = canvas.height;
-    staticDirty = true;
   }
   new ResizeObserver(resize).observe($('scene'));
   function projectFor(pose) {
     const p = result.parameters, w = sceneWidth, h = sceneHeight;
-    const scale = camera === 'overview' ? Math.min((w - 90) / result.c.length, (h - 180) / (p.laneWidth + 1.5)) : Math.min((w - 70) / 10, (h - 110) / (p.laneWidth + 1.5));
+    const scale = camera === 'overview' ? Math.min(Math.max(1,w - 90) / result.c.length, Math.max(1,h - 180) / (p.laneWidth + 1.5)) : Math.min(Math.max(1,w - 70) / 10, Math.max(1,h - 110) / (p.laneWidth + 1.5));
     const center = camera === 'overview' ? result.c.length / 2 : pose.x + 1.5;
     const at = point => ({ x: w / 2 + (point.x - center) * scale, y: h * 0.44 - point.y * scale });
     return { at, scale, minX: center - w / (2 * scale), maxX: center + w / (2 * scale) };
@@ -319,8 +323,10 @@
     text(ctx,'左',7,rect.height-7,'#839078',10);text(ctx,'右',rect.width-7,rect.height-7,'#839078',10,'right');
   }
   function frame(timestamp) {
+    requestAnimationFrame(frame);
     const elapsed=lastFrame?Math.min((timestamp-lastFrame)/1000,0.1):0;lastFrame=timestamp;
-    if(result && !dirty) {
+    if (sceneWidth <= 0 || sceneHeight <= 0) return;
+    if(result) {
       if(playing) {
         distance=Math.min(result.length,distance+elapsed*result.parameters.speed/3.6*Number($('playback').value));
         if(distance>=result.length){playing=false;$('play').textContent='重新播放';}
@@ -332,6 +338,12 @@
       }
       ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(backdrop,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
       drawCar(ctx,pose,projection,camera==='follow');drawInset(ctx,pose);
+      canvas.dataset.routeState = dirty ? (busy ? 'calculating' : 'stale') : 'ready';
+      $('telemetry-title').textContent = dirty ? '上次线路遥测 · 新参数尚未应用' : '实时遥测';
+      if (dirty) {
+        ctx.fillStyle='rgba(255,254,247,.94)';ctx.fillRect(12,sceneHeight-65,sceneWidth-24,30);
+        text(ctx,busy?'正在计算新线路 · 画面为上次结果':'参数待重算 · 画面为上次结果',sceneWidth/2,sceneHeight-45,'#a27035',12,'center');
+      }
       const checks=M.inspectPose(pose,result.parameters,result.c);
       $('steer-value').textContent=turn(pose.handle/M.RAD);$('front-value').textContent=turn(pose.steer/M.RAD);
       $('pole-value').textContent=cm(checks.pole);$('edge-value').textContent=cm(checks.edge);
@@ -348,7 +360,6 @@
       text(ctx,busy?'正在搜索线路并检查整车扫掠…':'参数已改变 · 请计算新的线路',sceneWidth/2,sceneHeight/2,'#75836e',15,'center');
       for (const id of ['steer-value','front-value','pole-value','edge-value','offtrack-value','slip-value']) $(id).textContent='—';
     }
-    requestAnimationFrame(frame);
   }
   resize(); requestAnimationFrame(frame); calculate();
 })();
