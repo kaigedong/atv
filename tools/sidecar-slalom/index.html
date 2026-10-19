@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f6f5ee">
+  <title>边三轮 · 绕桩实验室</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="page-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><path d="M15 8v32M15 15h18v20H15M9 24h12M28 11l5 4-5 4"/><circle cx="15" cy="8" r="3"/><circle cx="15" cy="40" r="3"/><circle cx="33" cy="35" r="3"/></svg>
+        </span>
+        <div>
+          <p class="eyebrow">SIDECAR / PATH LAB</p>
+          <h1>边三轮 <span>·</span> 绕桩实验室</h1>
+        </div>
+      </div>
+      <p class="header-note"><span class="note-dot" aria-hidden="true"></span>从车辆尺寸，理解每一次转弯。<small>低速几何模拟 · 示例参数可调整</small></p>
+    </header>
+
+    <main class="workspace">
+      <aside class="parameter-panel panel" aria-labelledby="parameter-title">
+        <div class="panel-heading">
+          <div><p class="section-kicker">01 / SETUP</p><h2 id="parameter-title">场地与车辆</h2></div>
+          <span class="tiny-tag">参数</span>
+        </div>
+        <p class="section-description">填入场地和实车尺寸，探索一条留有余量的绕桩线路。</p>
+        <form id="parameters">
+          <section class="field-section" aria-labelledby="basic-title">
+            <h3 id="basic-title">基础参数</h3>
+            <div id="field-basic" class="fields"></div>
+          </section>
+          <details class="vehicle-details">
+            <summary>车辆几何 <span class="summary-hint">精细调整</span></summary>
+            <div id="field-vehicle" class="fields"></div>
+          </details>
+          <div class="form-actions">
+            <button id="calculate" class="button button-primary" type="submit"><span aria-hidden="true">↗</span> 计算推荐线路</button>
+            <button id="reset" class="button button-quiet" type="button">恢复示例</button>
+          </div>
+        </form>
+        <div class="parameter-notes">
+          <span class="note-label">尺寸口径</span>
+          <p>桩距指桩杆的中心距；场宽指两侧边线内缘之间的距离。</p>
+          <p>净距指车身或把端到杆表面的最短距离。</p>
+          <p class="example-note">默认参数仅作交互示例，非考场标准。请按实际场地与车辆尺寸校准。</p>
+        </div>
+      </aside>
+
+      <div class="main-column">
+        <section class="scene-panel panel" aria-labelledby="scene-title">
+          <div class="scene-heading">
+            <div><p class="section-kicker">02 / SIMULATION</p><h2 id="scene-title">线路推演 <span id="result-badge" class="result-badge">待计算</span></h2></div>
+            <div class="view-switch" role="group" aria-label="画布视角">
+              <button id="view-overview" class="view-button active" type="button" aria-pressed="true">全场</button>
+              <button id="view-follow" class="view-button" type="button" aria-pressed="false">跟车</button>
+            </div>
+          </div>
+          <div class="scene-meta">
+            <p id="status" role="status" aria-live="polite">准备就绪，调整参数后计算推荐线路。</p>
+            <span class="canvas-scale-label" aria-hidden="true">PLAN VIEW / 俯视</span>
+          </div>
+          <div id="error" class="error-message" role="alert" hidden></div>
+          <div class="canvas-wrap">
+            <canvas id="scene" width="1200" height="600" aria-label="边三轮绕桩线路俯视模拟图：场地从左向右行进，屏幕上方为行进方向的左侧。">边三轮绕桩线路模拟画布。可通过下方实时遥测和逐桩净距表了解模拟数据。</canvas>
+            <div class="canvas-corner corner-top" aria-hidden="true"></div>
+            <div class="canvas-corner corner-bottom" aria-hidden="true"></div>
+          </div>
+          <div class="canvas-caption">
+            <p><span aria-hidden="true">↑</span> 屏幕上方＝行进方向左侧 <span class="caption-divider">/</span> 场地从左向右行进 <span aria-hidden="true">→</span></p>
+            <p>全场查看线路，跟车观察转向与净距。</p>
+          </div>
+          <div class="scene-options">
+            <div class="legend" aria-label="线路图例">
+              <span><i class="legend-line front-line" aria-hidden="true"></i>前轮</span>
+              <span><i class="legend-line rear-line" aria-hidden="true"></i>后轮</span>
+              <span><i class="legend-line sidecar-line" aria-hidden="true"></i>边斗轮</span>
+              <span><i class="legend-area" aria-hidden="true"></i>车身扫掠</span>
+            </div>
+            <div class="display-toggles">
+              <label><input id="show-envelope" type="checkbox" checked> 显示扫掠</label>
+              <label><input id="show-trails" type="checkbox" checked> 显示轮迹</label>
+            </div>
+          </div>
+          <div class="transport" aria-label="模拟播放控制">
+            <div class="transport-buttons">
+              <button id="play" class="button button-play" type="button" disabled>播放模拟</button>
+              <button id="restart" class="button button-secondary" type="button" disabled>重新开始</button>
+            </div>
+            <div class="timeline">
+              <label class="sr-only" for="scrub">模拟进度</label>
+              <input id="scrub" type="range" min="0" max="1000" step="1" value="0" disabled>
+              <span id="time" class="time-display">0.0 / 0.0 s</span>
+            </div>
+            <label class="playback-label" for="playback"><span class="sr-only">播放速度</span>
+              <select id="playback" aria-label="播放速度"><option value="1">1 倍速</option><option value="2">2 倍速</option><option value="4">4 倍速</option><option value="0.5">0.5 倍速</option></select>
+            </label>
+          </div>
+        </section>
+
+        <section class="telemetry-panel panel" aria-labelledby="telemetry-title">
+          <div class="telemetry-heading"><h2 id="telemetry-title">实时遥测</h2><span class="section-kicker">LIVE / 当前帧</span></div>
+          <div class="telemetry-grid">
+            <div class="steering-display"><canvas id="steering" width="240" height="160" aria-label="当前车把转向角度示意仪表">当前车把转向角度</canvas><div><span class="metric-label">车把转角</span><span id="steer-value" class="metric-value">—</span></div></div>
+            <div class="telemetry-item"><span class="metric-label">前轮转角</span><span id="front-value" class="metric-value">—</span><small>前轮实际偏转</small></div>
+            <div class="telemetry-item"><span class="metric-label">最近桩杆净距</span><span id="pole-value" class="metric-value">—</span><small>至杆表面</small></div>
+            <div class="telemetry-item"><span class="metric-label">边线净距</span><span id="edge-value" class="metric-value">—</span><small>至边线内缘</small></div>
+            <div class="telemetry-item"><span class="metric-label">瞬时定圆轮差</span><span id="offtrack-value" class="metric-value">—</span><small>同曲率下前后轮半径差</small></div>
+            <div class="telemetry-item"><span class="metric-label">边斗轮擦滑角</span><span id="slip-value" class="metric-value">—</span><small>几何侧滑需求</small></div>
+          </div>
+        </section>
+
+        <section class="results-panel panel" aria-labelledby="results-title">
+          <div class="panel-heading"><div><p class="section-kicker">03 / ANALYSIS</p><h2 id="results-title">线路分析</h2></div><button id="export" class="button button-secondary export-button" type="button" disabled><span aria-hidden="true">↓</span> 下载线路</button></div>
+          <div class="summary-grid">
+            <div class="summary-item"><span>最窄净距</span><strong id="summary-clearance">—</strong><small>全车至桩杆 / 边线</small></div>
+            <div class="summary-item"><span>前轮峰值转角</span><strong id="summary-angle">—</strong><small>线路中的峰值</small></div>
+            <div class="summary-item"><span>全程长度</span><strong id="summary-length">—</strong><small>推荐轨迹长度</small></div>
+            <div class="summary-item"><span>模拟用时</span><strong id="summary-time">—</strong><small>按设定速度估算</small></div>
+          </div>
+          <div id="recommendation" class="recommendation">计算后，这里将显示线路建议与几何余量。模拟结果用于理解车辆运动，不能代替实车验证。</div>
+          <div class="table-heading"><h3>逐桩净距</h3><span>至桩杆表面 · 模拟值</span></div>
+          <div class="table-scroll"><table><caption class="sr-only">推荐线路逐桩过杆方向、转角与净距</caption><thead><tr><th scope="col">桩位</th><th scope="col">从哪侧过</th><th scope="col">前轮过杆时<br>后轮距杆前 <small>(m)</small></th><th scope="col">此时车把</th><th scope="col">后轮过杆时<br>距中线 <small>(m)</small></th><th scope="col">全车最小净距 <small>(cm)</small></th></tr></thead><tbody id="pole-table"><tr class="empty-row"><td colspan="6">等待线路计算</td></tr></tbody></table></div>
+          <p id="search-info" class="search-info">候选线路搜索信息将在计算后显示。</p>
+        </section>
+
+        <details class="method-details panel">
+          <summary><span><span class="method-symbol" aria-hidden="true">i</span> 方法与适用范围</span><span class="summary-hint">了解模型假设</span></summary>
+          <div class="method-content">
+            <div><h3>低速运动学</h3><p>采用低速运动学与平面刚体几何，推演车轮轨迹、车身扫掠和障碍净距。边斗轮前移时，车辆转弯必然存在几何擦滑；擦滑角反映轮胎需要吸收的运动方向差异。</p></div>
+            <div><h3>模型边界</h3><p>未模拟轮胎力、倾覆、悬挂、载荷转移及路面附着。动画中的通过不代表实际行驶安全，也不代表符合官方考试标准。</p></div>
+            <div><h3>线路搜索与校准</h3><p>推荐线路来自有限候选曲线的搜索，并非全局最优解。请实际测量车辆、车把和边斗尺寸，校准转向关系及场地参数，再以低速实车验证。</p></div>
+          </div>
+        </details>
+      </div>
+    </main>
+    <footer class="page-footer"><span>SIDECAR / PATH LAB</span><p>把几何看清，再把余量留足。</p><span>交互模拟 · 非实测报告</span></footer>
+  </div>
+  <script src="model.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
